@@ -1,0 +1,12 @@
+.lein-*
+target
+.hgignore
+.hg/
+.nrepl-port
+resources/public/script.js
+.rebel_readline_history
+*.png
+resources/public/cljs-out
+node_modules
+package-lock.json
+package.json
