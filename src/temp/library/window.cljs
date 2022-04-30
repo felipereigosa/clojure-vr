@@ -110,18 +110,47 @@
     (conj (vector/normalize (js->clj axis))
           (util/to-degrees angle))))
 
+(def button-names [:trigger :grip nil nil :a :b nil])
+
+(defonce button-states (atom {:left (vec (repeat 7 false))
+                              :right (vec (repeat 7 false))}))
+
+(defn update-buttons [world hand gamepad]
+  (let [buttons (.-buttons gamepad)]
+    (reduce (fn [w n]
+              (let [button (nth buttons n)]
+                (if (not= (.-pressed button) (get-in @button-states [hand n]))
+                  (let [event {:hand hand
+                               :button (get button-names n)}]
+                    (swap! button-states #(assoc-in % [hand n] (.-pressed button)))
+                    (if (.-pressed button)
+                      (core/button-pressed w event)
+                      (core/button-released w event)))
+                  w)))
+            world
+            (range (.-length buttons)))))
+
 (defn update-input-sources [world frame]
   (let [ref-space (:ref-space world)
         session (.-session frame)]
     (reduce (fn [w input-source]
-              (let [target-ray-pose (.getPose frame (.-targetRaySpace input-source) ref-space)
-                    transform (.-transform target-ray-pose)
+              (let [pose (.getPose frame (.-gripSpace input-source) ref-space)
+                    transform (.-transform pose)
                     position (.-position transform)
-                    rotation (.-orientation transform)]
+                    rotation (.-orientation transform)
+                    gamepad (.-gamepad input-source)
+                    hand (keyword (.-handedness input-source))
+                    w (update-buttons w hand gamepad)]
                 (core/controller-moved w {:position [(.-x position) (.-y position) (.-z position)]
                                           :rotation (quat->axis-angle [(.-x rotation) (.-y rotation)
                                                                        (.-z rotation) (.-w rotation)])
-                                          :which (keyword (.-handedness input-source))})))
+                                          :hand hand
+                                          :buttons (map (fn [button]
+                                                          {:pressed (.-pressed button)
+                                                           :value (.-value button)
+                                                           :touched (.-touched button)})
+                                                        (.-buttons gamepad))
+                                          :axes (array-seq (.-axes gamepad))})))
             world (array-seq (.-inputSources session)))))
 
 (defn loop! [time frame]

@@ -62,7 +62,7 @@
   (let [left-cube (get-in world [:meshes :controller-left])
         rotation (:rotation left-cube)
         point (matrix/apply-transform (matrix/make-transform [0 0 0] rotation)
-                                      [0 0.1 0])]
+                                      [0 0 -0.1])]
     (-> world
         (assoc-in [:meshes :point :position]
                   (vector/add (:position left-cube) point))
@@ -82,15 +82,24 @@
                           :rotation rotation}))
       world)))
 
-(defn controller-moved [world {:keys [position rotation which] :as event}]
+(defn button-pressed [world {:keys [hand button]}]
+  (if (= button :grip)
+    (assoc-in world [:meshes (util/join-keywords :controller hand) :color] '(1 0 0))
+    world))
+
+(defn button-released [world {:keys [hand button]}]
+  (if (= button :grip)
+    (assoc-in world [:meshes (util/join-keywords :controller hand) :color] '(1 1 1))
+    world))
+
+(defn controller-moved [world {:keys [position rotation hand] :as event}]
   (-> world
-      (update-in [:meshes (util/join-keywords :controller which)]
+      (update-in [:meshes (util/join-keywords :controller hand)]
                  #(merge %
                          {:position (vector/add position [0 0.5 3])
                           :rotation rotation}))
       move-point
-      ;; snap-cube
-      ))
+      snap-cube))
 
 (defn keep-active? [world]
   true
