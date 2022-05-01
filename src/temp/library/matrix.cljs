@@ -1,8 +1,6 @@
 (ns temp.library.matrix
   (:require gl-matrix
-            [temp.library.util :as util]
-            ;; [temp.library.vector :as vector]
-            ))
+            [temp.library.util :as util]))
 
 (gl-matrix/glMatrix.setMatrixArrayType js/Array)
 
@@ -64,3 +62,24 @@
 
 (defn apply-transform [transform point]
   (vec (butlast (multiply transform point))))
+
+(defn undo-transform [m]
+  (let [q (.create gl-matrix/quat)]
+    (.getRotation gl-matrix/mat4 q m)
+    (let [axis (.create gl-matrix/vec3)
+          angle (util/to-degrees (.getAxisAngle gl-matrix/quat axis q))
+          position (.create gl-matrix/vec3)]
+      (.getTranslation gl-matrix/mat4 position m)
+      {:position (js->clj position)
+       :rotation (conj (js->clj axis) angle)})))
+
+(defn combine-transforms [a b]
+  (let [ma (make-transform (:position a) (:rotation a))
+        mb (make-transform (:position b) (:rotation b))]
+    (undo-transform (multiply ma mb))))
+
+(defn remove-transform [a b]
+  (let [ma (make-transform (:position a) (:rotation a))
+        mb (make-transform (:position b) (:rotation b))
+        imb (invert mb)]
+    (undo-transform (multiply ma imb))))

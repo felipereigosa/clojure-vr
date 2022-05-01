@@ -41,67 +41,6 @@
     {:index program
      :locations (create-locations gl program)}))
 
-;; (def button (atom nil))
-
-;; (defn get-button-name [value]
-;;   (get {1 :left
-;;         4 :middle
-;;         2 :right}
-;;        value))
-
-;; (defn create-listener [handler]
-;;   (fn [event]
-;;     (let [canvas (.-target event)
-;;           rect (.getBoundingClientRect canvas)
-;;           x (- (.-clientX event) (.-left rect))
-;;           y (- (.-clientY event) (.-top rect))
-;;           b (or (get-button-name (.-buttons event))
-;;                 @button)
-;;           e {:x x
-;;              :y y
-;;              :button b}]
-;;       (reset! button b)
-;;       (if (not (nil? @world/world))
-;;         (swap! world/world handler e)))))
-
-;; (defn create-listeners! [canvas]
-;;   (let [canvas (util/get-by-id :canvas-2d)]
-
-;;     (set! (.-onmousedown canvas)
-;;       (create-listener (fn [w e]
-;;                          (reset! time-since-update 0)
-;;                          (core/mouse-pressed w e))))
-
-;;     (set! (.-onmousemove canvas)
-;;       (create-listener (fn [w e]
-;;                          (reset! time-since-update 0)
-;;                          (core/mouse-moved w e))))
-
-;;     (set! (.-onmouseup canvas)
-;;       (create-listener (fn [w e]
-;;                          (reset! time-since-update 0)
-;;                          (core/mouse-released w e))))
-
-;;     (set! (.-onwheel canvas)
-;;           (fn [event]
-;;             (let [value (if (pos? (.-deltaY event)) -1 1)]
-;;               (swap! world/world core/mouse-scrolled value))))
-
-;;     (set! (.-oncontextmenu canvas)
-;;           (fn [event] (.preventDefault event)))
-
-;;     (set! (.-onkeydown js/window)
-;;           (fn [event]
-;;             (swap! world/world core/key-pressed
-;;                    {:name (.-key event)
-;;                     :code (.-code event)})))
-
-;;     (set! (.-onkeyup js/window)
-;;           (fn [event]
-;;             (swap! world/world core/key-released
-;;                    {:name (.-key event)
-;;                     :code (.-code event)})))))
-
 (defn quat->axis-angle [input]
   (let [[x y z w] input
         q (.fromValues gl-matrix/quat x y z w)
@@ -134,23 +73,25 @@
   (let [ref-space (:ref-space world)
         session (.-session frame)]
     (reduce (fn [w input-source]
-              (let [pose (.getPose frame (.-gripSpace input-source) ref-space)
-                    transform (.-transform pose)
-                    position (.-position transform)
-                    rotation (.-orientation transform)
-                    gamepad (.-gamepad input-source)
-                    hand (keyword (.-handedness input-source))
-                    w (update-buttons w hand gamepad)]
-                (core/controller-moved w {:position [(.-x position) (.-y position) (.-z position)]
-                                          :rotation (quat->axis-angle [(.-x rotation) (.-y rotation)
-                                                                       (.-z rotation) (.-w rotation)])
-                                          :hand hand
-                                          :buttons (map (fn [button]
-                                                          {:pressed (.-pressed button)
-                                                           :value (.-value button)
-                                                           :touched (.-touched button)})
-                                                        (.-buttons gamepad))
-                                          :axes (array-seq (.-axes gamepad))})))
+              (if-let [pose (.getPose frame (.-gripSpace input-source) ref-space)]
+                (let [transform (.-transform pose)
+                      position (.-position transform)
+                      rotation (.-orientation transform)
+                      gamepad (.-gamepad input-source)
+                      hand (keyword (.-handedness input-source))
+                      w (update-buttons w hand gamepad)
+                      w (assoc-in w [:actuators hand] (first (.-hapticActuators gamepad)))]
+                  (core/controller-moved w {:position [(.-x position) (.-y position) (.-z position)]
+                                            :rotation (quat->axis-angle [(.-x rotation) (.-y rotation)
+                                                                         (.-z rotation) (.-w rotation)])
+                                            :hand hand
+                                            :buttons (map (fn [button]
+                                                            {:pressed (.-pressed button)
+                                                             :value (.-value button)
+                                                             :touched (.-touched button)})
+                                                          (.-buttons gamepad))
+                                            :axes (array-seq (.-axes gamepad))}))
+                w))
             world (array-seq (.-inputSources session)))))
 
 (defn loop! [time frame]
@@ -207,7 +148,6 @@
                  (swap! world/world #(assoc-in % [:ctx] (.getContext canvas-2d "2d")))
                  (swap! world/world #(init-world-gl % gl rs))
                  (swap! world/world core/create-world)
-                 ;; (create-listeners! canvas)
                  (.requestAnimationFrame session loop!))))))
 
 (defn init []
@@ -239,11 +179,17 @@
                          #(-> (.requestSession (.-xr js/navigator) "immersive-vr")
                               (.then on-session-started)))))))))
 
-(init) ;; (defonce _ (init))
+(defonce _ (init))
 
-;; (when @world/reload?
-;;   (reset!
-;;     world/world
-;;     (-> @world/world
-;;         (select-keys [:buffers :gl :projection-matrix :programs])
-;;         core/create-world)))
+(when @world/reload?
+  (println "reloaded")
+  (reset!
+    world/world
+    (-> @world/world
+        (select-keys [:actuators
+                      :buffers
+                      :gl
+                      :ref-space
+                      :ctx
+                      :programs])
+        core/create-world)))
