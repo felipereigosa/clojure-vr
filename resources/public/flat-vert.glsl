@@ -11,7 +11,7 @@ varying mediump vec4 fColor;
 void main() {
     gl_Position = projectionMatrix * viewMatrix * cameraMatrix * modelMatrix * position;
 
-    vec3 lightDirection = vec3(-3, -1, -1);
+    vec3 lightDirection = vec3(0, -1, -1);
     vec4 vertexColor = vec4(0.0, 0.0, 0.0, 1.0);
     float ambientIntensity = 0.4;
 

@@ -5,8 +5,9 @@ uniform mat4 modelMatrix;
 uniform mat4 cameraMatrix;
 attribute vec4 position;
 attribute vec3 normal;
-attribute vec4 color;
 varying mediump vec4 fColor;
+attribute vec2 textureCoordinates;
+varying vec2 f_texture_coordinates;
 
 void main() {
     gl_Position = projectionMatrix * viewMatrix * cameraMatrix * modelMatrix * position;
@@ -14,6 +15,7 @@ void main() {
     vec3 lightDirection = vec3(0, -1, -1);
     vec4 vertexColor = vec4(0.0, 0.0, 0.0, 1.0);
     float ambientIntensity = 0.4;
+    vec4 materialColor = vec4(1, 1, 1, 1);
 
     vec4 transformed_normal = cameraMatrix * modelMatrix * vec4(normal, 0.0);
     transformed_normal[3] = 0.0;
@@ -22,9 +24,10 @@ void main() {
     vec3 halfPlane = normalize(vec3(0, 0, 1) - lightDirection);
     float nDotH = max(0.0, dot(transformed_normal.xyz, halfPlane));
 
-    vertexColor += color * ambientIntensity;
-    vertexColor += color * nDotH;
+    vertexColor += materialColor * ambientIntensity;
+    vertexColor += materialColor * nDotH;
     vertexColor += vec4(1, 1, 1, 1) * nDotH * 0.05;
 
     fColor = vertexColor;
+    f_texture_coordinates = textureCoordinates;
 }

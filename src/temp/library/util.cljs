@@ -89,3 +89,5 @@
 (defn join-keywords [& keywords]
   (keyword (apply str (interpose "-" (map (fn [k]
                                             (subs (str k) 1)) keywords)))))
+(defn in? [elm seq]
+  (some #(= elm %) seq))

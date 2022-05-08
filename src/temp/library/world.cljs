@@ -24,4 +24,14 @@
     `(set-thing! ~path (let [~val-name (get-thing! ~path)]
                          ~(cons fn (list val-name))))))
 
-;; (println ">" (set-thing! [:meshes :controller-right :color] '(1 0 0)))
+;;#######################################################
+(defonce image
+  (let [image (js/Image. "letters.png")]
+    (set! (.-onload image)
+          (fn []
+            (println "loaded"
+                     (.-naturalWidth image) "x"
+                     (.-naturalHeight image))
+            ))
+    (set! (.-src image) "letters.png")
+    image))

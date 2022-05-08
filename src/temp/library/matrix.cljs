@@ -16,7 +16,7 @@
   (if (vector? other)
     (let [v (.create gl-matrix/vec4)]
       (.transformMat4 gl-matrix/vec4
-                      v (clj->js (conj other 0)) m)
+                      v (clj->js (conj other 1.0)) m)
       (vec (js->clj v)))
     (let [m2 (get-identity)]
       (.multiply gl-matrix/mat4 m2 other m)
@@ -60,9 +60,6 @@
        gl-matrix/mat4 matrix q (clj->js position) (clj->js scale))
      matrix)))
 
-(defn apply-transform [transform point]
-  (vec (butlast (multiply transform point))))
-
 (defn undo-transform [m]
   (let [q (.create gl-matrix/quat)]
     (.getRotation gl-matrix/mat4 q m)
@@ -83,3 +80,6 @@
         mb (make-transform (:position b) (:rotation b))
         imb (invert mb)]
     (undo-transform (multiply ma imb))))
+
+(defn apply-transform [{:keys [position rotation]} point]
+  (vec (butlast (multiply (make-transform position rotation) point))))

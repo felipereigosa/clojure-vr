@@ -5,8 +5,6 @@
             [temp.library.world :as world]
             [temp.core :as core]))
 
-(def time-since-update (atom 0))
-
 (defn load-shader [gl type source]
   (let [shader (.createShader gl type)]
     (.shaderSource gl shader source)
@@ -26,12 +24,15 @@
    :material-color (.getUniformLocation gl program "materialColor")
    :color (.getAttribLocation gl program "color")
    :position (.getAttribLocation gl program "position")
-   :normal (.getAttribLocation gl program "normal")})
+   :normal (.getAttribLocation gl program "normal")
+   :texture-coordinates (.getAttribLocation gl program "textureCoordinates")})
 
 (defn compile-program [gl name]
   (let [vs-source (get @world/data-map (str name "-vert.glsl"))
         vertex-shader (load-shader gl (.-VERTEX_SHADER gl) vs-source)
-        fs-source (get @world/data-map (str name "-frag.glsl"))
+        fs-source (get @world/data-map (if (= name "textured")
+                                         (str name "-frag.glsl")
+                                         "frag.glsl"))
         fragment-shader (load-shader gl (.-FRAGMENT_SHADER gl) fs-source)
         program (.createProgram gl)]
     (.attachShader gl program vertex-shader)
@@ -99,28 +100,23 @@
         world @world/world
         gl (:gl world)]
     (.requestAnimationFrame session loop!)
-    (when (< @time-since-update 5000)
-      (swap! world/world core/update-world)
-      (swap! world/world #(update-input-sources % frame))
-      (let [pose (.getViewerPose frame (:ref-space @world/world))
-            gl-layer (.-baseLayer (.-renderState session))]
-        (.bindFramebuffer gl (.-FRAMEBUFFER gl) (.-framebuffer gl-layer))
-        (.clear gl (bit-or (.-COLOR_BUFFER_BIT gl)
-                           (.-DEPTH_BUFFER_BIT gl)))
+    (swap! world/world core/update-world)
+    (swap! world/world #(update-input-sources % frame))
+    (let [pose (.getViewerPose frame (:ref-space @world/world))
+          gl-layer (.-baseLayer (.-renderState session))]
+      (.bindFramebuffer gl (.-FRAMEBUFFER gl) (.-framebuffer gl-layer))
+      (.clear gl (bit-or (.-COLOR_BUFFER_BIT gl)
+                         (.-DEPTH_BUFFER_BIT gl)))
 
-        (doseq [view (.-views pose)]
-          (let [viewport (.getViewport gl-layer view)]
-            (.viewport gl (.-x viewport) (.-y viewport)
-                       (.-width viewport) (.-height viewport))
-            (-> @world/world
-                (assoc-in [:projection-matrix] (.-projectionMatrix view))
-                (assoc-in [:view-matrix]
-                          (.-matrix (.-inverse (.-transform view))))
-                (core/draw-world!))))
-
-        (swap! time-since-update #(+ 16 %)) ;;######################## use time
-        (when (core/keep-active? @world/world)
-          (reset! time-since-update 0))))))
+      (doseq [view (.-views pose)]
+        (let [viewport (.getViewport gl-layer view)]
+          (.viewport gl (.-x viewport) (.-y viewport)
+                     (.-width viewport) (.-height viewport))
+          (-> @world/world
+              (assoc-in [:projection-matrix] (.-projectionMatrix view))
+              (assoc-in [:view-matrix]
+                        (.-matrix (.-inverse (.-transform view))))
+              (core/draw-world!)))))))
 
 (defn init-world-gl [world gl ref-space]
   (.enable gl (.-CULL_FACE gl))
@@ -132,11 +128,13 @@
       (assoc-in [:gl] gl)
       (assoc-in [:ref-space] ref-space)
       (assoc-in [:programs :flat] (compile-program gl "flat"))
-      ;; (assoc-in [:programs :colored] (compile-program gl "colored"))
+      (assoc-in [:programs :colored] (compile-program gl "colored"))
+      (assoc-in [:programs :textured] (compile-program gl "textured"))
       (assoc-in [:programs :wireframe] (compile-program gl "wireframe"))
       (assoc-in [:buffers] {:position (.createBuffer gl)
                             :normal (.createBuffer gl)
-                            :color (.createBuffer gl)})))
+                            :color (.createBuffer gl)
+                            :texture-coordinates (.createBuffer gl)})))
 
 (defn on-session-started [session]
   (let [canvas (.createElement js/document "canvas")
@@ -151,12 +149,12 @@
                  (.requestAnimationFrame session loop!))))))
 
 (defn init []
-  (let [filenames ["flat-vert.glsl"
-                   "flat-frag.glsl"
-                   ;; "colored-vert.glsl"
-                   ;; "colored-frag.glsl"
+  (let [filenames ["frag.glsl"
+                   "flat-vert.glsl"
+                   "textured-vert.glsl"
+                   "textured-frag.glsl"
+                   "colored-vert.glsl"
                    "wireframe-vert.glsl"
-                   "wireframe-frag.glsl"
                    "cube.obj"
                    "cube.mtl"
                    "sphere.obj"
@@ -165,8 +163,12 @@
                    "cylinder.mtl"
                    "cone.obj"
                    "cone.mtl"
-                   ;; "red-yellow.obj"
-                   ;; "red-yellow.mtl"
+                   "letters.obj"
+                   "letters.mtl"
+                   "letters2.obj"
+                   "letters2.mtl"
+                   "axis.obj"
+                   "axis.mtl"
                    ]]
     (-> (js/Promise.all (map #(.fetch js/window %) filenames))
         (.then (fn [responses]

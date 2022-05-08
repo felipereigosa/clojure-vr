@@ -59,49 +59,107 @@
     (.drawArrays gl (.-TRIANGLES gl) 0 num-vertices)))
 
 (defn draw-colored [world mesh]
-;;   (let [{:keys [position rotation vertex-buffer normal-buffer
-;;                 color-buffer num-vertices scale]} mesh
-;;         gl (:gl world)
-;;         projection-matrix (:projection-matrix world)
-;;         buffers (:buffers world)
-;;         model-matrix (matrix/make-transform position rotation scale)
-;;         view-matrix (get-in world [:camera :view-matrix])
-;;         program (get-in world [:programs :colored])
-;;         locations (:locations program)]
-;;     (.useProgram gl (:index program))
-;;     (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
-;;     (.uniformMatrix4fv gl (:model-matrix locations) false model-matrix)
-;;     (.uniformMatrix4fv gl (:view-matrix locations) false view-matrix)
-;;     (.bindBuffer gl (.-ARRAY_BUFFER gl) (:position buffers))
-;;     (.vertexAttribPointer gl (:position locations) 3 (.-FLOAT gl)
-;;                           false 0 vertex-buffer)
-;;     (.enableVertexAttribArray gl (:position locations))
-;;     (.bufferData gl (.-ARRAY_BUFFER gl) vertex-buffer
-;;                  (.-STATIC_DRAW gl))
-;;     (.bindBuffer gl (.-ARRAY_BUFFER gl) (:color buffers))
-;;     (.vertexAttribPointer gl (:color locations) 4 (.-FLOAT gl)
-;;                           false 0 color-buffer)
-;;     (.enableVertexAttribArray gl (:color locations))
-;;     (.bufferData gl (.-ARRAY_BUFFER gl) color-buffer
-;;                  (.-STATIC_DRAW gl))
-;;     (.bindBuffer gl (.-ARRAY_BUFFER gl) (:normal buffers))
-;;     (.vertexAttribPointer gl (:normal locations) 3 (.-FLOAT gl)
-;;                           false 0 normal-buffer)
-;;     (.enableVertexAttribArray gl (:normal locations))
-;;     (.bufferData gl (.-ARRAY_BUFFER gl) normal-buffer
-;;                  (.-STATIC_DRAW gl))
-  ;;     (.drawArrays gl (.-TRIANGLES gl) 0 num-vertices))
-  )
+  (let [{:keys [gl projection-matrix view-matrix camera buffers]} world
+        program (get-in world [:programs :colored])
+        locations (:locations program)
+        buffers (:buffers world)
+        {:keys [position rotation vertex-buffer normal-buffer
+                color-buffer num-vertices scale]} mesh
+        camera-matrix (:view-matrix camera)
+        model-matrix (matrix/make-transform position rotation scale)]
 
-(defn create [vertices position rotation scale skin normals]
+    (.useProgram gl (:index program))
+    (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
+    (.uniformMatrix4fv gl (:model-matrix locations) false model-matrix)
+    (.uniformMatrix4fv gl (:view-matrix locations) false view-matrix)
+    (.uniformMatrix4fv gl (:camera-matrix locations) false camera-matrix)
+
+    (.bindBuffer gl (.-ARRAY_BUFFER gl) (:position buffers))
+    (.vertexAttribPointer gl (:position locations) 3 (.-FLOAT gl)
+                          false 0 vertex-buffer)
+    (.enableVertexAttribArray gl (:position locations))
+    (.bufferData gl (.-ARRAY_BUFFER gl) vertex-buffer (.-STATIC_DRAW gl))
+
+    (.bindBuffer gl (.-ARRAY_BUFFER gl) (:color buffers))
+    (.vertexAttribPointer gl (:color locations) 4 (.-FLOAT gl)
+                          false 0 color-buffer)
+    (.enableVertexAttribArray gl (:color locations))
+    (.bufferData gl (.-ARRAY_BUFFER gl) color-buffer (.-STATIC_DRAW gl))
+
+    (.bindBuffer gl (.-ARRAY_BUFFER gl) (:normal buffers))
+    (.vertexAttribPointer gl (:normal locations) 3 (.-FLOAT gl)
+                          false 0 normal-buffer)
+    (.enableVertexAttribArray gl (:normal locations))
+    (.bufferData gl (.-ARRAY_BUFFER gl) normal-buffer (.-STATIC_DRAW gl))
+
+    (.drawArrays gl (.-TRIANGLES gl) 0 num-vertices)))
+
+(defn draw-textured [world mesh]
+  (let [{:keys [gl projection-matrix view-matrix camera buffers]} world
+        program (get-in world [:programs :textured])
+        locations (:locations program)
+        buffers (:buffers world)
+        {:keys [position rotation vertex-buffer normal-buffer
+                texture texture-coordinates-buffer
+                num-vertices scale]} mesh
+        camera-matrix (:view-matrix camera)
+        model-matrix (matrix/make-transform position rotation scale)]
+    (.useProgram gl (:index program))
+    (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
+    (.uniformMatrix4fv gl (:model-matrix locations) false model-matrix)
+    (.uniformMatrix4fv gl (:view-matrix locations) false view-matrix)
+    (.uniformMatrix4fv gl (:camera-matrix locations) false camera-matrix)
+
+    (.bindBuffer gl (.-ARRAY_BUFFER gl) (:position buffers))
+    (.vertexAttribPointer gl (:position locations) 3 (.-FLOAT gl)
+                          false 0 vertex-buffer)
+    (.enableVertexAttribArray gl (:position locations))
+    (.bufferData gl (.-ARRAY_BUFFER gl) vertex-buffer (.-STATIC_DRAW gl))
+
+    (.bindBuffer gl (.-ARRAY_BUFFER gl) (:normal buffers))
+    (.vertexAttribPointer gl (:normal locations) 3 (.-FLOAT gl)
+                          false 0 normal-buffer)
+    (.enableVertexAttribArray gl (:normal locations))
+    (.bufferData gl (.-ARRAY_BUFFER gl) normal-buffer (.-STATIC_DRAW gl))
+
+    (.bindTexture gl (.-TEXTURE_2D gl) texture)
+    (.bindBuffer gl (.-ARRAY_BUFFER gl) (:texture-coordinates buffers))
+    (.vertexAttribPointer gl (:texture-coordinates locations) 2 (.-FLOAT gl)
+                          false 0 texture-coordinates-buffer)
+    (.enableVertexAttribArray gl (:texture-coordinates locations))
+    (.bufferData gl (.-ARRAY_BUFFER gl) texture-coordinates-buffer
+                 (.-STATIC_DRAW gl))
+
+    (.drawArrays gl (.-TRIANGLES gl) 0 num-vertices)))
+
+(defn load-texture []
+  (let [gl (:gl @world/world) ;;###################
+        texture (.createTexture gl)]
+    (.bindTexture gl (.-TEXTURE_2D gl) texture)
+    (.texImage2D gl (.-TEXTURE_2D gl) 0 (.-RGBA gl)
+                 (.-RGBA gl) (.-UNSIGNED_BYTE gl) world/image)
+    (.generateMipmap gl (.-TEXTURE_2D gl))
+    texture))
+
+(defn create [vertices position rotation scale
+              skin normals texture-coordinates]
   (let [vertices (flatten vertices)
         scale (if (vector? scale)
                 scale
                 (vec (repeat 3 scale)))
         normals (or normals (compute-normals vertices))
-        skin (if (and (vector? skin) (vector? (first skin)))
+        skin (cond
+               (string? skin)
+               {:texture (load-texture)
+                :texture-coordinates-buffer
+                (js/Float32Array. (vec (flatten texture-coordinates)))
+                :draw-fn draw-textured}
+
+               (and (vector? skin) (vector? (first skin)))
                {:color-buffer (js/Float32Array. (vec (flatten skin)))
                 :draw-fn draw-colored}
+
+               :else
                {:color (rgb skin)
                 :draw-fn draw-flat})]
     (merge skin
@@ -231,65 +289,16 @@
          normals (flatten (map #(use-indices n %) (faces-nth 2)))
 
          texture-name (some :texture (vals materials))
-         texture-coords (if texture-name
-                          (use-indices t (map #(nth % 1) faces))
-                          [])
-         texture-coords (map (fn [[u v]]
-                               [u (- 1.0 v)])
-                             texture-coords)
+         texture-coordinates (if texture-name
+                               (flatten (map (fn [[u v]]
+                                               [u (- 1.0 v)])
+                                             (mapcat #(use-indices t %) (faces-nth 1))))
+                               [])
          skin (or color
                   texture-name
                   (create-colors lines materials))]
-     (create vertices position rotation scale skin normals))))
-
-;; (defn absolute-faces [object-lines]
-;;   (let [faces (->> object-lines
-;;                    (filter #(.startsWith % "f"))
-;;                    (map parse-line-with-slashes))
-;;         offsets (map #(->> %
-;;                            (nthrest (flatten faces))
-;;                            (take-nth 3 )
-;;                            (apply min)
-;;                            dec)
-;;                      (range 3))]
-;;     (map (fn [line]
-;;            (if (.startsWith line "f")
-;;              (->> line
-;;                   parse-line-with-slashes
-;;                   (map #(vector/subtract % offsets))
-;;                   (map #(clojure.string/join "/" %))
-;;                   (clojure.string/join " ")
-;;                   (str "f "))
-;;              line))
-;;          object-lines)))
-
-;; (defn create-models [filename]
-;;   (let [materials-filename (-> filename
-;;                                (subs 0 (.lastIndexOf filename "."))
-;;                                (str ".mtl"))
-;;         materials (parse-materials materials-filename)
-;;         lines (world/read-lines filename)
-;;         object-lines (util/create-groups #(.startsWith % "o") lines)]
-;;     (apply merge
-;;            (map (fn [lines]
-;;                   {(keyword (subs (first lines) 2))
-;;                    (create-model (absolute-faces lines)
-;;                                  materials [0 0 0] [1 0 0 0] 1 nil)})
-;;                 object-lines))))
-
-;; (defn recenter [mesh]
-;;   (let [vertices (->> (:vertex-buffer mesh)
-;;                       util/fa->vec
-;;                       (partition 3))
-;;         center (as-> vertices c
-;;                  (reduce vector/add [0 0 0] c)
-;;                  (vector/multiply c (/ 1.0 (count vertices))))]
-;;     (-> mesh
-;;         (assoc-in [:vertex-buffer] (->> vertices
-;;                                         (map #(vector/subtract % center))
-;;                                         flatten
-;;                                         js/Float32Array.))
-;;         (assoc-in [:position] center))))
+     (create vertices position rotation scale skin
+             normals texture-coordinates))))
 
 (defn draw [world mesh]
   (when mesh
