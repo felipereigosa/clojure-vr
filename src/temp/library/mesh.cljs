@@ -1,4 +1,4 @@
-(ns temp.library.meshes
+(ns temp.library.mesh
   (:require [temp.library.vector :as vector]
             [temp.library.matrix :as matrix]
             [temp.library.util :as util :refer [third]]
@@ -35,7 +35,7 @@
                 normal-buffer num-vertices scale]} mesh
         [r g b] color
         camera-matrix (:view-matrix camera)
-        model-matrix (matrix/make-transform position rotation scale)]
+        model-matrix (matrix/from-transform position rotation scale)]
 
     (.useProgram gl (:index program))
     (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
@@ -66,7 +66,7 @@
         {:keys [position rotation vertex-buffer normal-buffer
                 color-buffer num-vertices scale]} mesh
         camera-matrix (:view-matrix camera)
-        model-matrix (matrix/make-transform position rotation scale)]
+        model-matrix (matrix/from-transform position rotation scale)]
 
     (.useProgram gl (:index program))
     (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
@@ -103,7 +103,7 @@
                 texture texture-coordinates-buffer
                 num-vertices scale]} mesh
         camera-matrix (:view-matrix camera)
-        model-matrix (matrix/make-transform position rotation scale)]
+        model-matrix (matrix/from-transform position rotation scale)]
     (.useProgram gl (:index program))
     (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
     (.uniformMatrix4fv gl (:model-matrix locations) false model-matrix)
@@ -179,7 +179,7 @@
                 num-vertices scale]} mesh
         [r g b] color
         camera-matrix (:view-matrix camera)
-        model-matrix (matrix/make-transform position rotation scale)]
+        model-matrix (matrix/from-transform position rotation scale)]
     (.useProgram gl (:index program))
     (.uniformMatrix4fv gl (:projection-matrix locations) false projection-matrix)
     (.uniformMatrix4fv gl (:model-matrix locations) false model-matrix)

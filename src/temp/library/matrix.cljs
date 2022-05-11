@@ -45,9 +45,9 @@
     (.scale gl-matrix/mat4 m matrix (clj->js scale))
     m))
 
-(defn make-transform
+(defn from-transform
   ([position rotation]
-   (make-transform position rotation [1 1 1]))
+   (from-transform position rotation [1 1 1]))
 
   ([position rotation scale]
    (let [axis (clj->js (vec (take 3 rotation)))
@@ -60,26 +60,9 @@
        gl-matrix/mat4 matrix q (clj->js position) (clj->js scale))
      matrix)))
 
-(defn undo-transform [m]
-  (let [q (.create gl-matrix/quat)]
-    (.getRotation gl-matrix/mat4 q m)
-    (let [axis (.create gl-matrix/vec3)
-          angle (util/to-degrees (.getAxisAngle gl-matrix/quat axis q))
-          position (.create gl-matrix/vec3)]
-      (.getTranslation gl-matrix/mat4 position m)
-      {:position (js->clj position)
-       :rotation (conj (js->clj axis) angle)})))
-
-(defn combine-transforms [a b]
-  (let [ma (make-transform (:position a) (:rotation a))
-        mb (make-transform (:position b) (:rotation b))]
-    (undo-transform (multiply ma mb))))
-
-(defn remove-transform [a b]
-  (let [ma (make-transform (:position a) (:rotation a))
-        mb (make-transform (:position b) (:rotation b))
-        imb (invert mb)]
-    (undo-transform (multiply ma imb))))
-
-(defn apply-transform [{:keys [position rotation]} point]
-  (vec (butlast (multiply (make-transform position rotation) point))))
+(defn quat->axis-angle [input]
+  (let [[x y z w] input
+        q (.fromValues gl-matrix/quat x y z w)
+        axis (.create gl-matrix/vec3)
+        angle (.getAxisAngle gl-matrix/quat axis q)]
+    (conj (js->clj axis) (util/to-degrees angle))))

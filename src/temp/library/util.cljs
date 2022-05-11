@@ -16,10 +16,13 @@
 (defn find-if [pred coll]
   (first (filter pred coll)))
 
+(defn get-time []
+  (.getTime (js/Date.)))
+
 (defn sleep [duration]
   (dorun
-   (let [now (.getTime (new js/Date))]
-     (while (< (.getTime (new js/Date)) (+ now duration))))))
+   (let [now (get-time)]
+     (while (< (get-time) (+ now duration))))))
 
 (def pi Math/PI)
 
@@ -28,6 +31,37 @@
 
 (defn to-degrees [angle]
   (* angle (/ 180.0 pi)))
+
+(defn sin [angle]
+  (Math/sin (to-radians angle)))
+
+(defn cos [angle]
+  (Math/cos (to-radians angle)))
+
+(defn acos [value]
+  (to-degrees (Math/acos value)))
+
+(defn atan2 [y x]
+  (Math/toDegrees (Math/atan2 y x)))
+
+(defn sqrt [x]
+  (Math/sqrt x))
+
+(defn abs [x]
+  (Math/abs x))
+
+(defn pow [n e]
+  (Math/pow n e))
+
+(defn round [n]
+  (Math/round (float n)))
+
+(defn snap-value [value step]
+  (if (number? step)
+    (* (round (/ value step)) step)
+    (first
+     (first
+       (sort-by second (map #(list % (abs (- % value))) step))))))
 
 (defn vec->fa [vec]
   (js/Float32Array. vec))

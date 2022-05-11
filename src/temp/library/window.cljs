@@ -42,14 +42,6 @@
     {:index program
      :locations (create-locations gl program)}))
 
-(defn quat->axis-angle [input]
-  (let [[x y z w] input
-        q (.fromValues gl-matrix/quat x y z w)
-        axis (.create gl-matrix/vec3)
-        angle (.getAxisAngle gl-matrix/quat axis q)]
-    (conj (vector/normalize (js->clj axis))
-          (util/to-degrees angle))))
-
 (def button-names [:trigger :grip nil nil :a :b nil])
 
 (defonce button-states (atom {:left (vec (repeat 7 false))
@@ -81,17 +73,18 @@
                       gamepad (.-gamepad input-source)
                       hand (keyword (.-handedness input-source))
                       w (update-buttons w hand gamepad)
-                      w (assoc-in w [:actuators hand] (first (.-hapticActuators gamepad)))]
+                      w (assoc-in w [:actuators hand] (first (.-hapticActuators gamepad)))
+                      [_ _ x y] (array-seq (.-axes gamepad))]
                   (core/controller-moved w {:position [(.-x position) (.-y position) (.-z position)]
-                                            :rotation (quat->axis-angle [(.-x rotation) (.-y rotation)
-                                                                         (.-z rotation) (.-w rotation)])
+                                            :rotation (matrix/quat->axis-angle [(.-x rotation) (.-y rotation)
+                                                                                (.-z rotation) (.-w rotation)])
                                             :hand hand
                                             :buttons (map (fn [button]
                                                             {:pressed (.-pressed button)
                                                              :value (.-value button)
                                                              :touched (.-touched button)})
                                                           (.-buttons gamepad))
-                                            :axes (array-seq (.-axes gamepad))}))
+                                            :axes [x (- y)]}))
                 w))
             world (array-seq (.-inputSources session)))))
 
