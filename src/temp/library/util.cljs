@@ -125,3 +125,15 @@
                                             (subs (str k) 1)) keywords)))))
 (defn in? [elm seq]
   (some #(= elm %) seq))
+
+(defn jsx->clj [x]
+  (into {} (for [k (.keys js/Object x)] [k (aget x k)])))
+
+(defn alert [obj]
+  (.alert js/window obj))
+
+(defn jalert [obj]
+  (.alert js/window (jsx->clj obj)))
+
+(defn gen-keyword [base]
+  (keyword (gensym (symbol (subs (str base) 1)))))

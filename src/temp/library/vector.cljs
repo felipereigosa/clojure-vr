@@ -1,6 +1,7 @@
 (ns temp.library.vector
   (:require [temp.library.util :as util]
-            [temp.library.matrix :as matrix]))
+            ;; [temp.library.matrix :as matrix]
+            ))
 
 (defn dot-product [v1 v2]
   (reduce + (map * v1 v2)))
@@ -27,9 +28,9 @@
 (defn normalize [v]
   (vec (map #(/ % (length v)) v)))
 
-(defn rotate [vector axis angle]
-  (let [rotation (matrix/from-rotation axis angle)]
-    (vec (butlast (matrix/multiply rotation vector)))))
+;; (defn rotate [vector axis angle]
+;;   (let [rotation (matrix/from-rotation axis angle)]
+;;     (vec (butlast (matrix/multiply rotation vector)))))
 
 (defn distance [a b]
   (length (subtract a b)))

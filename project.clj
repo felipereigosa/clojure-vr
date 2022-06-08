@@ -16,6 +16,5 @@
                         :compiler {:output-to "resources/public/cljs-out/dev-main.js"
                                    :optimizations :advanced
                                    :pretty-print true
-                                   :npm-deps {:gl-matrix "3.4.3"}
                                    :install-deps true}}]}
   :main server.core)

@@ -1,190 +1,116 @@
 (ns temp.library.window
   (:require [temp.library.util :as util]
-            [temp.library.vector :as vector]
-            [temp.library.matrix :as matrix]
             [temp.library.world :as world]
+            [temp.library.transform :as transform]
+            [temp.library.three :as three]
             [temp.core :as core]))
 
-(defn load-shader [gl type source]
-  (let [shader (.createShader gl type)]
-    (.shaderSource gl shader source)
-    (.compileShader gl shader)
-    (if (not (.getShaderParameter gl shader (.-COMPILE_STATUS gl)))
-      (do
-        (js/alert "Error loading shader")
-        (println (.getShaderInfoLog gl shader))
-        (.deleteShader gl shader))
-      shader)))
+(def THREE js/window.THREE)
 
-(defn create-locations [gl program]
-  {:projection-matrix (.getUniformLocation gl program "projectionMatrix")
-   :view-matrix (.getUniformLocation gl program "viewMatrix")
-   :model-matrix (.getUniformLocation gl program "modelMatrix")
-   :camera-matrix (.getUniformLocation gl program "cameraMatrix")
-   :material-color (.getUniformLocation gl program "materialColor")
-   :color (.getAttribLocation gl program "color")
-   :position (.getAttribLocation gl program "position")
-   :normal (.getAttribLocation gl program "normal")
-   :texture-coordinates (.getAttribLocation gl program "textureCoordinates")})
+;; (def button-names [:trigger :grip nil nil :a :b nil])
 
-(defn compile-program [gl name]
-  (let [vs-source (get @world/data-map (str name "-vert.glsl"))
-        vertex-shader (load-shader gl (.-VERTEX_SHADER gl) vs-source)
-        fs-source (get @world/data-map (if (= name "textured")
-                                         (str name "-frag.glsl")
-                                         "frag.glsl"))
-        fragment-shader (load-shader gl (.-FRAGMENT_SHADER gl) fs-source)
-        program (.createProgram gl)]
-    (.attachShader gl program vertex-shader)
-    (.attachShader gl program fragment-shader)
-    (.linkProgram gl program)
-    (.useProgram gl program)
-    {:index program
-     :locations (create-locations gl program)}))
+;; (defonce button-states (atom {:left (vec (repeat 7 false))
+;;                               :right (vec (repeat 7 false))}))
 
-(def button-names [:trigger :grip nil nil :a :b nil])
+;; (defn update-buttons [world hand gamepad]
+;;   (let [buttons (.-buttons gamepad)]
+;;     (reduce (fn [w n]
+;;               (let [button (nth buttons n)]
+;;                 (if (not= (.-pressed button) (get-in @button-states [hand n]))
+;;                   (let [event {:hand hand
+;;                                :button (get button-names n)}]
+;;                     (swap! button-states #(assoc-in % [hand n] (.-pressed button)))
+;;                     (if (.-pressed button)
+;;                       (core/button-pressed w event)
+;;                       (core/button-released w event)))
+;;                   w)))
+;;             world
+;;             (range (.-length buttons)))))
 
-(defonce button-states (atom {:left (vec (repeat 7 false))
-                              :right (vec (repeat 7 false))}))
+;; (defn update-controllers-state [world]
+;;   (let [renderer (:renderer world)]
+;;     (if-let [session (.getSession (.-xr renderer))]
+;;       (reduce (fn [w input-source]
+;;                 (let [gamepad (.-gamepad input-source)
+;;                       hand (keyword (.-handedness input-source))
+;;                       [_ _ x y] (array-seq (.-axes gamepad))]
+;;                   (-> w
+;;                       (update-buttons hand gamepad)
+;;                       (assoc-in [:controllers hand :axes] [x y])
+;;                       (assoc-in [:controllers hand :actuator]
+;;                                 (first (.-hapticActuators gamepad))))))
+;;               world (array-seq (.-inputSources session)))
+;;       world)))
 
-(defn update-buttons [world hand gamepad]
-  (let [buttons (.-buttons gamepad)]
-    (reduce (fn [w n]
-              (let [button (nth buttons n)]
-                (if (not= (.-pressed button) (get-in @button-states [hand n]))
-                  (let [event {:hand hand
-                               :button (get button-names n)}]
-                    (swap! button-states #(assoc-in % [hand n] (.-pressed button)))
-                    (if (.-pressed button)
-                      (core/button-pressed w event)
-                      (core/button-released w event)))
-                  w)))
-            world
-            (range (.-length buttons)))))
+;; (defn update-controller-transform [world index name]
+;;   (let [renderer (:renderer world)
+;;         controller (.getController (.-xr renderer) index)
+;;         position (.-position controller)
+;;         position [(.-x position) (.-y position) (.-z position)]
+;;         rotation (transform/quat->aa (.-quaternion controller))]
+;;     (-> world
+;;         (update-in [:controllers name]
+;;                    #(merge % (transform/combine (:camera world)
+;;                                                 {:position position
+;;                                                  :rotation rotation})))
+;;         (update-in [:controllers name] three/sync-object))))
 
-(defn update-input-sources [world frame]
-  (let [ref-space (:ref-space world)
-        session (.-session frame)]
-    (reduce (fn [w input-source]
-              (if-let [pose (.getPose frame (.-gripSpace input-source) ref-space)]
-                (let [transform (.-transform pose)
-                      position (.-position transform)
-                      rotation (.-orientation transform)
-                      gamepad (.-gamepad input-source)
-                      hand (keyword (.-handedness input-source))
-                      w (update-buttons w hand gamepad)
-                      w (assoc-in w [:actuators hand] (first (.-hapticActuators gamepad)))
-                      [_ _ x y] (array-seq (.-axes gamepad))]
-                  (core/controller-moved w {:position [(.-x position) (.-y position) (.-z position)]
-                                            :rotation (matrix/quat->axis-angle [(.-x rotation) (.-y rotation)
-                                                                                (.-z rotation) (.-w rotation)])
-                                            :hand hand
-                                            :buttons (map (fn [button]
-                                                            {:pressed (.-pressed button)
-                                                             :value (.-value button)
-                                                             :touched (.-touched button)})
-                                                          (.-buttons gamepad))
-                                            :axes [x (- y)]}))
-                w))
-            world (array-seq (.-inputSources session)))))
+;; (defn update-controllers [world]
+;;   (-> world
+;;       (update-controller-transform 0 :left)
+;;       (update-controller-transform 1 :right)
+;;       (update-controllers-state)))
 
-(defn loop! [time frame]
-  (let [session (.-session frame)
-        world @world/world
-        gl (:gl world)]
-    (.requestAnimationFrame session loop!)
+(defn loop! []
+  (let [{:keys [renderer scene camera]} @world/world]
     (swap! world/world core/update-world)
-    (swap! world/world #(update-input-sources % frame))
-    (let [pose (.getViewerPose frame (:ref-space @world/world))
-          gl-layer (.-baseLayer (.-renderState session))]
-      (.bindFramebuffer gl (.-FRAMEBUFFER gl) (.-framebuffer gl-layer))
-      (.clear gl (bit-or (.-COLOR_BUFFER_BIT gl)
-                         (.-DEPTH_BUFFER_BIT gl)))
-
-      (doseq [view (.-views pose)]
-        (let [viewport (.getViewport gl-layer view)]
-          (.viewport gl (.-x viewport) (.-y viewport)
-                     (.-width viewport) (.-height viewport))
-          (-> @world/world
-              (assoc-in [:projection-matrix] (.-projectionMatrix view))
-              (assoc-in [:view-matrix]
-                        (.-matrix (.-inverse (.-transform view))))
-              (core/draw-world!)))))))
-
-(defn init-world-gl [world gl ref-space]
-  (.enable gl (.-CULL_FACE gl))
-  (.cullFace gl (.-GL_BACK gl))
-  (.clearDepth gl 1.0)
-  (.enable gl (.-DEPTH_TEST gl))
-  (.depthFunc gl (.-LEQUAL gl))
-  (-> world
-      (assoc-in [:gl] gl)
-      (assoc-in [:ref-space] ref-space)
-      (assoc-in [:programs :flat] (compile-program gl "flat"))
-      (assoc-in [:programs :colored] (compile-program gl "colored"))
-      (assoc-in [:programs :textured] (compile-program gl "textured"))
-      (assoc-in [:programs :wireframe] (compile-program gl "wireframe"))
-      (assoc-in [:buffers] {:position (.createBuffer gl)
-                            :normal (.createBuffer gl)
-                            :color (.createBuffer gl)
-                            :texture-coordinates (.createBuffer gl)})))
-
-(defn on-session-started [session]
-  (let [canvas (.createElement js/document "canvas")
-        canvas-2d (.createElement js/document "canvas")
-        gl (.getContext canvas "webgl2" (clj->js {:antialias true :xrCompatible true}))]
-    (.updateRenderState session (clj->js {:baseLayer (js/XRWebGLLayer. session gl)}))
-    (-> (.requestReferenceSpace session "local")
-        (.then (fn [rs]
-                 (swap! world/world #(assoc-in % [:ctx] (.getContext canvas-2d "2d")))
-                 (swap! world/world #(init-world-gl % gl rs))
-                 (swap! world/world core/create-world)
-                 (.requestAnimationFrame session loop!))))))
+    (.render renderer scene (:camera camera))))
 
 (defn init []
-  (let [filenames ["frag.glsl"
-                   "flat-vert.glsl"
-                   "textured-vert.glsl"
-                   "textured-frag.glsl"
-                   "colored-vert.glsl"
-                   "wireframe-vert.glsl"
-                   "cube.obj"
-                   "cube.mtl"
-                   "sphere.obj"
-                   "sphere.mtl"
-                   "cylinder.obj"
-                   "cylinder.mtl"
-                   "cone.obj"
-                   "cone.mtl"
-                   "letters.obj"
-                   "letters.mtl"
-                   "letters2.obj"
-                   "letters2.mtl"
-                   "axis.obj"
-                   "axis.mtl"
-                   ]]
-    (-> (js/Promise.all (map #(.fetch js/window %) filenames))
-        (.then (fn [responses]
-                 (js/Promise.all (map #(.text %) responses))))
-        (.then (fn [texts]
-                 (reset! world/data-map (zipmap filenames texts))
-                 (let [button (util/get-by-id :button)]
-                   (set! (.-textContent button) "Enter VR")
-                   (set! (.-onclick button)
-                         #(-> (.requestSession (.-xr js/navigator) "immersive-vr")
-                              (.then on-session-started)))))))))
+  (let [scene (new THREE.Scene)
+        width (.-innerWidth js/window)
+        height (.-innerHeight js/window)
+        ratio (/ width height)
+        camera (new THREE.PerspectiveCamera 30 ratio 0.1 100)
+        renderer (new THREE.WebGLRenderer (clj->js {:antialias true}))
+        holder (new THREE.Group)]
+    (.set (.-position camera) 0 2 4)
+    (.lookAt camera 0 0 0)
+    (set! (.-background scene) (new THREE.Color 0x505050))
+
+    (.setPixelRatio renderer (.-devicePixelRatio js/window))
+    (.setSize renderer width height)
+    (set! (.-outputEncoding renderer) THREE.sRGBEncoding)
+    (set! (.-enabled (.-xr renderer)) true)
+    (.setReferenceSpaceType (.-xr renderer) "local")
+    (reset! world/world {:scene scene
+                         :camera {:position [0 0 0]
+                                  :rotation [1 0 0 0]
+                                  :object holder
+                                  :camera camera}
+                         :renderer renderer})
+    (swap! world/world core/create-world)
+    (swap! world/world assoc-in [:button-functions] [#(core/button-pressed %1 %2)
+                                                     #(core/button-released %1 %2)])
+    (.setAnimationLoop renderer loop!)
+    (.appendChild (.-body js/document) (.-domElement renderer))
+    (.appendChild (.-body js/document) (.createButton js/window.VRButton renderer))
+    (.add holder camera)
+    (.add scene holder)
+    (new js/window.OrbitControls camera renderer.domElement)
+    1))
 
 (defonce _ (init))
 
-(when @world/reload?
-  (println "reloaded")
-  (reset!
-    world/world
-    (-> @world/world
-        (select-keys [:actuators
-                      :buffers
-                      :gl
-                      :ref-space
-                      :ctx
-                      :programs])
-        core/create-world)))
+;; (when @world/reload?
+;;   (println "reloaded")
+;;   (let [scene (:scene @world/world)
+;;         holder (new THREE.Group)]
+;;     (.clear scene)
+;;     (.add holder (:camera world/world))
+;;     (.add scene holder)
+;;     (reset! world/world
+;;             (-> @world/world
+;;                 (select-keys [:renderer :scene :camera])
+;;                 (assoc-in [:holder] holder)))
+;;     (swap! world/world core/create-world)))

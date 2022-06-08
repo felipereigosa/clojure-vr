@@ -1,18 +1,8 @@
 (ns temp.manipulation
-  (:require [temp.controller :as controller]
-            [temp.library.transform :as transform]
+  (:require [temp.library.transform :as transform]
             [temp.library.vector :as vector]
-            [temp.library.util :as util :refer [dissoc-in]]
-            [temp.library.mesh :as mesh]))
-
-(declare move-connected)
-
-(defn draw-ghost-object! [world]
-  (if-let [[a b _ :as connection] (:pre-connection world)]
-    (let [world (move-connected (update-in world [:connections] #(conj % connection)) a)]
-      (mesh/draw world (-> (get-in world [:meshes b])
-                           (assoc-in [:color] '(1 0 1)) ;;##################
-                           )))))
+            [temp.library.three :as three]
+            [temp.library.util :as util :refer [dissoc-in]]))
 
 (defn get-closest-object [meshes position]
   (->> meshes
@@ -35,12 +25,12 @@
       world)))
 
 (defn grab [world hand]
-  (let [controller-transform (controller/get-transform world hand)]
+  (let [controller-transform (get-in world [:controllers hand])]
     (if-let [object-name (get-closest-object (:meshes world)
                                              (:position controller-transform))]
       (let [object (get-in world [:meshes object-name])
-            relative-transform (transform/subtract object controller-transform)]
-        (controller/pulse world hand 1 50)
+            relative-transform (transform/remove controller-transform object)]
+        (three/pulse world hand 1 50)
         (-> world
             (assoc-in [:picked-object hand] (assoc relative-transform :name object-name))
             remove-connection))
@@ -56,18 +46,20 @@
         root-object (get-in world [:meshes root-name])]
     (reduce (fn [w connection]
               (let [[other-name relative-transform] (prepare-connection connection root-name)
-                    transform (transform/combine relative-transform root-object)]
+                    transform (transform/combine root-object relative-transform)]
                 (-> w
                     (update-in [:meshes other-name] #(merge % transform))
+                    (update-in [:meshes other-name] three/sync-object)
                     (move-connected w other-name))))
             world
             connections)))
 
 (defn move [world hand]
   (if-let [{:keys [name] :as picked-object} (get-in world [:picked-object hand])]
-    (let [transform (transform/combine picked-object (controller/get-transform world hand))]
+    (let [transform (transform/combine (get-in world [:controllers hand]) picked-object)]
       (-> world
           (update-in [:meshes name] #(merge % transform))
+          (update-in [:meshes name] three/sync-object)
           (move-connected name)))
     world))
 
@@ -82,8 +74,8 @@
     (dissoc-in world [:picked-object hand])))
 
 (defn snaps-match? [left-object left-snap right-object right-snap]
-  (let [global-left-snap (transform/combine left-snap left-object)
-        global-right-snap (transform/combine right-snap right-object)
+  (let [global-left-snap (transform/combine left-object left-snap)
+        global-right-snap (transform/combine right-object right-snap)
         distance (vector/distance (:position global-left-snap)
                                   (:position global-right-snap))
         x-axis [1 0 0]
@@ -108,8 +100,9 @@
   (let [x-rotation {:position [0 0 0]
                     :rotation [1 0 0 180]}]
     (transform/combine
+      target-snap
       (transform/invert
-        (transform/combine x-rotation source-snap)) target-snap)))
+        (transform/combine source-snap x-rotation)))))
 
 (defn get-snap-transform [left-object right-object]
   (let [snaps (mapcat (fn [left-snap]
@@ -135,12 +128,12 @@
             right-object (get-in world [:meshes right-object-name])]
         (if-let [snap-transform (get-snap-transform left-object right-object)]
           (if (nil? (:pre-connection world))
-            (do
-              (.pulse (get-in world [:actuators :left]) 1 100)
-              (.pulse (get-in world [:actuators :right]) 1 100)
-              (assoc-in world [:pre-connection] [left-object-name
-                                                 right-object-name
-                                                 snap-transform]))
+            (-> world
+                (three/pulse :left 1 100)
+                (three/pulse :right 1 100)
+                (assoc-in [:pre-connection] [left-object-name
+                                             right-object-name
+                                             snap-transform]))
             world)
           (dissoc-in world [:pre-connection])))
       world)))
