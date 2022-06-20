@@ -5,6 +5,7 @@
             [temp.library.vector :as vector]
             [temp.library.transform :as transform]
             [temp.library.controllers :as controllers]
+            [temp.library.physics :as physics]
             [temp.manipulation :as manipulation]))
 
 (defn process-brick [world brick-group]
@@ -66,24 +67,32 @@
         (update-in [:meshes :yellow-brick] #(merge % {:snaps snaps})))))
 
 (defn create-world [world]
-  (-> world
-      (three/set-clear-color [0 128 204])
-      (three/create-lights)
-      (assoc-in [:camera :position] [0 1.3 2])
-      (assoc-in [:camera :rotation] [0 1 0 0])
-      (update-in [:camera] three/sync-object)
-      (three/set-camera [0 2 4] [0 0.5 0])
-      (three/create-cube [:background-meshes :ground]
-                         [0 -0.101 0] [1 0 0 0] [12 0.2 12] [5 5 5])
-      (three/create-wireframe [:background-meshes :grid]
-                              (three/get-grid-vertices 12 1) [2 2 2] 2)
-      (three/create-cube [:controllers :right] [0.1 0 0] [0 1 0 0] 0.05 :red)
-      (three/create-cube [:controllers :left] [-0.1 0 0] [0 1 0 0] 0.05 :white)
-      (load-brick create-bricks)
-      (three/create-model [:background-meshes :room] "baked.glb" [0 0 0] [0 1 0 180] 1)
-      (assoc-in [:velocity] 0.0)
-      (assoc-in [:turn-velocity] 0.0)
-      ))
+  (let [planet (physics/create-planet 10)]
+    (-> world
+        (assoc-in [:planet] planet)
+        (three/set-clear-color [0 128 204])
+        (three/create-lights)
+        ;; (assoc-in [:camera :position] [0 1.3 2])
+        ;; (assoc-in [:camera :rotation] [0 1 0 0])
+        ;; (update-in [:camera] three/sync-object)
+        ;; (three/set-camera [0 2 4] [0 0.5 0])
+        (three/create-cube [:background-meshes :ground]
+                           [0 -0.101 0] [1 0 0 0] [12 0.2 12] [5 5 5])
+        (physics/create-floor [:background-meshes :ground])
+        (three/create-wireframe [:background-meshes :grid]
+                                (three/get-grid-vertices 12 1) [2 2 2] 2)
+        (three/create-cube [:controllers :right] [0.1 0 0] [0 1 0 0] 0.05 :red)
+        (three/create-cube [:controllers :left] [-0.1 0 0] [0 1 0 0] 0.05 :white)
+        ;; (load-brick create-bricks)
+        ;; (three/create-model [:background-meshes :room] "baked.glb" [0 0 0] [0 1 0 180] 1)
+        ;; (assoc-in [:velocity] 0.0)
+        ;; (assoc-in [:turn-velocity] 0.0)
+
+        (three/create-cube [:meshes :cube] [2 4 0] [0 0 1 -20] [0.5 1 0.5] :yellow)
+        (physics/create-cube [:meshes :cube] 5)
+        (three/create-cube [:meshes :cube2] [2.2 6 0] [0 0 1 0] 0.5 :red)
+        (physics/create-cube [:meshes :cube2] 1)
+        )))
 
 (defn set-velocity [world]
   (let [v (get-in world [:controllers :right :axes 1])
@@ -104,11 +113,15 @@
 
 (defn update-world [world]
   (-> world
-      controllers/update
-      (manipulation/move :right)
-      (manipulation/move :left)
-      set-velocity
-      move))
+      ;; controllers/update
+      ;; (manipulation/move :right)
+      ;; (manipulation/move :left)
+      ;; set-velocity
+      ;; move
+      physics/step
+      (update-in [:meshes :cube] physics/body-sync)
+      (update-in [:meshes :cube2] physics/body-sync)
+      ))
 
 (defn create-and-grab [world hand]
   (if (nil? (get-in world [:picked-object hand]))

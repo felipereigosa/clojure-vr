@@ -57,7 +57,7 @@
         renderer (new THREE.WebGLRenderer #js{:antialias true})
         holder (new THREE.Group)]
 
-    (.set (.-position camera) 0 2 4)
+    (.set (.-position camera) 0 7 15)
     (.lookAt camera 0 0 0)
 
     (set! (.-background scene) (new THREE.Color 0x505050))
