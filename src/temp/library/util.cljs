@@ -137,3 +137,12 @@
 
 (defn gen-keyword [base]
   (keyword (gensym (symbol (subs (str base) 1)))))
+
+(defn create-combinations [& lists]
+  (if (= (count lists) 1)
+    (map vector (first lists))
+    (mapcat (fn [a]
+              (map (fn [b]
+                     (cons a b))
+                   (apply create-combinations (rest lists))))
+            (first lists))))

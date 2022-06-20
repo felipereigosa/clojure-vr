@@ -1,4 +1,5 @@
 (ns temp.library.three
+  (:refer-clojure :exclude [clone])
   (:require [temp.library.world :as world]
             [temp.library.util :as util]
             [temp.library.vector :as vector]
@@ -6,8 +7,27 @@
 
 (def THREE js/window.THREE)
 
+(defn get-color [color]
+  (if (keyword? color)
+    (new THREE.Color (name color))
+    (let [[r g b] color]
+      (new THREE.Color (/ r 255) (/ g 255) (/ b 255)))))
+
+(defn set-camera [world position pivot]
+  (let [camera (:camera world)
+        inner-camera (:camera camera)]
+    (if-let [[x y z] position]
+      (.set (.-position inner-camera) x y z))
+
+    (if-let [[x y z] pivot]
+      (.lookAt inner-camera x y z))
+    world))
+
 (defn sync-object [obj]
-  (let [{:keys [position rotation scale object]} obj]
+  (let [{:keys [position rotation scale color object]} obj]
+    (if (not (nil? color))
+      (set! (.-color (.-material object)) (get-color color)))
+
     (if-let [[x y z] position]
       (.set (.-position object) x y z))
 
@@ -22,15 +42,9 @@
         (.set (.-scale object) sx sy sz)))
     obj))
 
-(defn get-color [color]
-  (if (keyword? color)
-    (new THREE.Color (name color))
-    (let [[r g b] color]
-      (new THREE.Color (/ r 255) (/ g 255) (/ b 255)))))
-
 (defn create-mesh [world path geometry position rotation scale color]
   (let [material (new THREE.MeshPhongMaterial
-                      (clj->js {:color (get-color color)}))
+                      #js{:color (get-color color)})
         mesh (new THREE.Mesh geometry material)]
     (.add (:scene world) mesh)
     (assoc-in world path (sync-object
@@ -62,8 +76,8 @@
 
 (defn create-wireframe [world path vertices color line-width]
   (let [material (new THREE.LineBasicMaterial
-                      (clj->js {:color (get-color color)
-                                :linewidth line-width}))
+                      #js{:color (get-color color)
+                          :linewidth line-width})
         points (apply array (map (fn [[x y z]]
                                    (new THREE.Vector3 x y z))
                                  vertices))
@@ -75,8 +89,7 @@
                             :color color}))))
 
 (defn create-model [w path filename position rotation scale]
-  (let [loader (new js/window.GLTFLoader)
-        object (atom nil)]
+  (let [loader (new js/window.GLTFLoader)]
     (.load loader filename (fn [gltf]
                              (let [scene (.-scene gltf)]
                                (.add (:scene @world/world) scene)
@@ -120,3 +133,15 @@
   (let [actuator (get-in world [:controllers hand :actuator])]
     (.pulse actuator strength duration)
     world))
+
+(defn clone-mesh [world path mesh]
+  (let [new-object (.clone (:object mesh))
+        new-mesh (assoc-in mesh [:object] new-object)]
+    (.add (:scene world) new-object)
+    (assoc-in world path new-mesh)))
+
+(defn get-camera-direction [world]
+  (let [camera (get-in world [:camera :camera])
+        vector (new THREE.Vector3 0 0 -1)]
+    (.applyQuaternion vector (.-quaternion camera))
+    [(.-x vector) (.-y vector) (.-z vector)]))

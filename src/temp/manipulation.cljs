@@ -13,17 +13,6 @@
        first
        first))
 
-(defn remove-connection [world]
-  (let [left-object-name (get-in world [:picked-object :left :name])
-        right-object-name (get-in world [:picked-object :right :name])]
-    (if (and left-object-name right-object-name)
-      (update-in world [:connections]
-                 (fn [connections]
-                   (vec (filter #(not (and (util/in? left-object-name %)
-                                           (util/in? right-object-name %)))
-                                connections))))
-      world)))
-
 (defn grab [world hand]
   (let [controller-transform (get-in world [:controllers hand])]
     (if-let [object-name (get-closest-object (:meshes world)
@@ -31,62 +20,31 @@
       (let [object (get-in world [:meshes object-name])
             relative-transform (transform/remove controller-transform object)]
         (three/pulse world hand 1 50)
-        (-> world
-            (assoc-in [:picked-object hand] (assoc relative-transform :name object-name))
-            remove-connection))
+        (assoc-in world [:picked-object hand] (assoc relative-transform :name object-name)))
       world)))
-
-(defn prepare-connection [[a b transform] root-name]
-  (if (= a root-name)
-    [b transform]
-    [a (transform/invert transform)]))
-
-(defn move-connected [world root-name]
-  (let [connections (filter #(util/in? root-name %) (:connections world))
-        root-object (get-in world [:meshes root-name])]
-    (reduce (fn [w connection]
-              (let [[other-name relative-transform] (prepare-connection connection root-name)
-                    transform (transform/combine root-object relative-transform)]
-                (-> w
-                    (update-in [:meshes other-name] #(merge % transform))
-                    (update-in [:meshes other-name] three/sync-object)
-                    (move-connected w other-name))))
-            world
-            connections)))
 
 (defn move [world hand]
   (if-let [{:keys [name] :as picked-object} (get-in world [:picked-object hand])]
     (let [transform (transform/combine (get-in world [:controllers hand]) picked-object)]
       (-> world
           (update-in [:meshes name] #(merge % transform))
-          (update-in [:meshes name] three/sync-object)
-          (move-connected name)))
+          (update-in [:meshes name] three/sync-object)))
     world))
 
-(defn release [world hand]
-  (let [world (if (= hand :right)
-                (if-let [connection (:pre-connection world)]
-                  (-> world
-                      (dissoc-in [:pre-connection])
-                      (update-in [:connections] #(conj % connection)))
-                  world)
-              world)]
-    (dissoc-in world [:picked-object hand])))
-
-(defn snaps-match? [left-object left-snap right-object right-snap]
-  (let [global-left-snap (transform/combine left-object left-snap)
-        global-right-snap (transform/combine right-object right-snap)
-        distance (vector/distance (:position global-left-snap)
-                                  (:position global-right-snap))
+(defn snaps-match? [object-b snap-b object-a snap-a]
+  (let [global-snap-b (transform/combine object-b snap-b)
+        global-snap-a (transform/combine object-a snap-a)
+        distance (vector/distance (:position global-snap-b)
+                                  (:position global-snap-a))
         x-axis [1 0 0]
         y-axis [0 1 0]
-        left-rotation (merge global-left-snap {:position [0 0 0]})
-        x-left (transform/apply left-rotation x-axis)
-        y-left (transform/apply left-rotation y-axis)
-        right-rotation (merge global-right-snap {:position [0 0 0]})
-        x-right (transform/apply right-rotation x-axis)
-        y-right (transform/apply right-rotation y-axis)
-        type (:type right-snap)]
+        rotation-b (merge global-snap-b {:position [0 0 0]})
+        x-left (transform/apply rotation-b x-axis)
+        y-left (transform/apply rotation-b y-axis)
+        rotation-a (merge global-snap-a {:position [0 0 0]})
+        x-right (transform/apply rotation-a x-axis)
+        y-right (transform/apply rotation-a y-axis)
+        type (:type snap-a)]
     (if (and (< distance 0.1)
              (or (= type :point)
                  (and
@@ -104,36 +62,40 @@
       (transform/invert
         (transform/combine source-snap x-rotation)))))
 
-(defn get-snap-transform [left-object right-object]
-  (let [snaps (mapcat (fn [left-snap]
-                        (map (fn [right-snap]
-                               [(snaps-match? left-object left-snap
-                                              right-object right-snap)
-                                left-snap right-snap])
-                             (:snaps right-object)))
-                      (:snaps left-object))]
-    (if-let [[_ left-snap right-snap] (->> snaps
-                                           (filter (comp not nil? first))
-                                           (sort-by first)
-                                           first)]
-      (get-object-relative-transform left-snap right-snap)
+(defn get-snap-transform [world object-name]
+  (let [object-a (get-in world [:meshes object-name])
+        snaps (mapcat (fn [target-name]
+                        (if (not (= target-name object-name))
+                          (let [object-b (get-in world [:meshes target-name])]
+                            (mapcat (fn [snap-b]
+                                   (map (fn [snap-a]
+                                          [(snaps-match? object-b snap-b
+                                                         object-a snap-a)
+                                           snap-b snap-a object-b])
+                                        (:snaps object-a)))
+                                 (:snaps object-b)))))
+                      (keys (:meshes world)))]
+    (if-let [[_ snap-b snap-a object-b]
+             (->> snaps
+                  (filter (comp not nil? first))
+                  (sort-by first)
+                  first)]
+      (transform/combine object-b (get-object-relative-transform snap-b snap-a))
       nil)))
 
-(defn snap-object [world]
-  (let [left-object-name (get-in world [:picked-object :left :name])
-        right-object-name (get-in world [:picked-object :right :name])]
-    (if (and left-object-name
-             right-object-name)
-      (let [left-object (get-in world [:meshes left-object-name])
-            right-object (get-in world [:meshes right-object-name])]
-        (if-let [snap-transform (get-snap-transform left-object right-object)]
-          (if (nil? (:pre-connection world))
-            (-> world
-                (three/pulse :left 1 100)
-                (three/pulse :right 1 100)
-                (assoc-in [:pre-connection] [left-object-name
-                                             right-object-name
-                                             snap-transform]))
-            world)
-          (dissoc-in world [:pre-connection])))
-      world)))
+(defn snap [world hand]
+  (if-let [object-name (get-in world [:picked-object hand :name])]
+    (if-let [snap-transform (get-snap-transform world object-name)]
+      (do
+        (three/pulse world hand 1 100)
+        (update-in world [:meshes object-name]
+                   #(-> %
+                        (merge snap-transform)
+                        (three/sync-object))))
+      world)
+    world))
+
+(defn release [world hand]
+  (-> world
+      (snap hand)
+      (dissoc-in [:picked-object hand])))
