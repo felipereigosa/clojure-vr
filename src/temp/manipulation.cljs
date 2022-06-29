@@ -4,22 +4,25 @@
             [temp.library.three :as three]
             [temp.library.util :as util :refer [dissoc-in]]))
 
-(defn get-closest-object [meshes position]
-  (->> meshes
-       (map (fn [[name mesh]]
-              [name (vector/distance (:position mesh) position)]))
-       (sort-by second)
-       (filter #(< (second %) 0.1))
-       first
-       first))
+(defn get-brick-at [world [px py pz]]
+  (let [raycaster (new THREE.Raycaster)]
+    (.set raycaster (new THREE.Vector3 px py pz) (new THREE.Vector3 1 1 1))
+    (first (util/find-if (fn [[brick-name brick]]
+                           (let [collision-cube (-> (:collision-cube world)
+                                                    (assoc-in [:scale] [0.618274 0.185482 0.309138]) ;;##########
+                                                    (assoc-in [:rotation] (:rotation brick))
+                                                    (assoc-in [:position] (:position brick))
+                                                    three/sync-object)]
+                             (= (mod (count (.intersectObject raycaster (:object collision-cube))) 2) 1)))
+                         (:meshes world)))))
 
 (defn grab [world hand]
   (let [controller-transform (get-in world [:controllers hand])]
-    (if-let [object-name (get-closest-object (:meshes world)
-                                             (:position controller-transform))]
+    (if-let [object-name (get-brick-at world (:position controller-transform))]
       (let [object (get-in world [:meshes object-name])
             relative-transform (transform/remove controller-transform object)]
         (three/pulse world hand 1 50)
+        (set! (.-type (:body object)) CANNON.Body.KINEMATIC)
         (assoc-in world [:picked-object hand] (assoc relative-transform :name object-name)))
       world)))
 
@@ -96,6 +99,10 @@
     world))
 
 (defn release [world hand]
-  (-> world
-      (snap hand)
-      (dissoc-in [:picked-object hand])))
+  (if-let [object-name (get-in world [:picked-object hand :name])]
+    (let [body (get-in world [:meshes object-name :body])]
+      (set! (.-type body) CANNON.Body.DYNAMIC)
+      (-> world
+          (snap hand)
+          (dissoc-in [:picked-object hand])))
+    world))

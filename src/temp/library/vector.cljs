@@ -6,7 +6,7 @@
   (reduce + (map * v1 v2)))
 
 (defn length [v]
-  (Math/sqrt (dot-product v v)))
+  (util/sqrt (dot-product v v)))
 
 (defn add [v1 v2]
   (vec (map + v1 v2)))
@@ -53,7 +53,7 @@
     (cond
       (>= v 1) 0
       (<= v -1) 180
-      :else (Math/acos v))))
+      :else (util/acos v))))
 
 (defn direction->rotation [direction]
   (let [direction (normalize direction)]

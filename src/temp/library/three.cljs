@@ -40,12 +40,14 @@
                          scale
                          (vec (repeat 3 scale)))]
         (.set (.-scale object) sx sy sz)))
+    (.updateMatrixWorld object)
     obj))
 
 (defn create-mesh [world path geometry position rotation scale color]
   (let [material (new THREE.MeshPhongMaterial
                       #js{:color (get-color color)})
         mesh (new THREE.Mesh geometry material)]
+    (set! (.-side material) 2)
     (.add (:scene world) mesh)
     (assoc-in world path (sync-object
                            {:object mesh
@@ -145,3 +147,7 @@
         vector (new THREE.Vector3 0 0 -1)]
     (.applyQuaternion vector (.-quaternion camera))
     [(.-x vector) (.-y vector) (.-z vector)]))
+
+(defn set-visible [mesh value]
+  (set! (.-visible (:object mesh)) value)
+  mesh)

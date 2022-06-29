@@ -3,6 +3,7 @@
             [temp.library.world :as world]
             [temp.library.transform :as transform]
             [temp.library.three :as three]
+            [temp.library.controllers :as controllers]
             [temp.core :as core]))
 
 (def THREE js/window.THREE)
@@ -83,6 +84,9 @@
 
     (create-mouse-listeners!)
     (new js/window.OrbitControls camera renderer.domElement)
+
+    (controllers/set-index! renderer 0)
+    (controllers/set-index! renderer 1)
     1))
 
 (defonce _ (init))

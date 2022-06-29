@@ -14,7 +14,9 @@
     (.setAxisAngleFromQuaternion v q)
     [(.-x v) (.-y v) (.-z v) (util/to-degrees (.-w v))]))
 
-(defn transform->matrix [{:keys [position rotation]}]
+(defn transform->matrix [{:keys [position rotation] :or
+                          {position [0 0 0]
+                           rotation [1 0 0 0]}}]
   (let [q (aa->quat rotation)
         [x y z] position
         p (new THREE.Vector3 x y z)
