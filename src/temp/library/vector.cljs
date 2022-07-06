@@ -47,13 +47,18 @@
 (defn equals? [a b]
   (every? #(util/float= % 0.0) (subtract a b)))
 
-(defn angle [a b]
-  (let [v (/ (dot-product a b)
-             (* (length a) (length b)))]
-    (cond
-      (>= v 1) 0
-      (<= v -1) 180
-      :else (util/acos v))))
+(defn angle
+  ([a b]
+   (let [v (/ (dot-product a b)
+              (* (length a) (length b)))]
+     (cond
+       (>= v 1) 0
+       (<= v -1) 180
+       :else (util/acos v))))
+  ([a b axis]
+   (if (pos? (dot-product (cross-product a b) axis))
+     (angle a b)
+     (- (angle a b)))))
 
 (defn direction->rotation [direction]
   (let [direction (normalize direction)]

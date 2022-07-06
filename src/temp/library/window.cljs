@@ -32,22 +32,21 @@
         (swap! world/world handler e)))))
 
 (defn create-mouse-listeners! []
-  (set! (.-onmousedown js/document)
-        (create-listener #(core/mouse-pressed %1 %2)))
-
-  (set! (.-onmousemove js/document)
-        (create-listener #(core/mouse-moved %1 %2)))
-
-  (set! (.-onmouseup js/document)
-        (create-listener #(core/mouse-released %1 %2)))
-
-  (set! (.-onwheel js/document)
-          (fn [event]
-            (let [value (if (pos? (.-deltaY event)) -1 1)]
-              (swap! world/world core/mouse-scrolled value))))
-
-  (set! (.-oncontextmenu js/document)
-        (fn [event] (.preventDefault event))))
+  (let [handler #(or % (fn [a b] a))]
+    (set! (.-onmousedown js/document)
+          (create-listener (handler (resolve 'core/mouse-pressed))))
+    (set! (.-onmousemove js/document)
+          (create-listener (handler (resolve 'core/mouse-moved))))
+    (set! (.-onmouseup js/document)
+          (create-listener (handler (resolve 'core/mouse-released))))
+    (set! (.-onwheel js/document)
+          (if-let [f (resolve 'core/mouse-scrolled)]
+            (fn [event]
+              (let [value (if (pos? (.-deltaY event)) -1 1)]
+                (swap! world/world f value)))
+            (fn [a b] a)))
+    (set! (.-oncontextmenu js/document)
+          (fn [event] (.preventDefault event)))))
 
 (defn init []
   (let [scene (new THREE.Scene)
@@ -58,6 +57,7 @@
         renderer (new THREE.WebGLRenderer #js{:antialias true})
         holder (new THREE.Group)]
 
+    (set! (.-fog scene) (new THREE.Fog 0x0 5 100))
     (.set (.-position camera) 0 7 15)
     (.lookAt camera 0 0 0)
 

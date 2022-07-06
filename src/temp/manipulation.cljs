@@ -4,17 +4,15 @@
             [temp.library.three :as three]
             [temp.library.util :as util :refer [dissoc-in]]))
 
-(defn get-brick-at [world [px py pz]]
-  (let [raycaster (new THREE.Raycaster)]
-    (.set raycaster (new THREE.Vector3 px py pz) (new THREE.Vector3 1 1 1))
-    (first (util/find-if (fn [[brick-name brick]]
-                           (let [collision-cube (-> (:collision-cube world)
-                                                    (assoc-in [:scale] [0.618274 0.185482 0.309138]) ;;##########
-                                                    (assoc-in [:rotation] (:rotation brick))
-                                                    (assoc-in [:position] (:position brick))
-                                                    three/sync-object)]
-                             (= (mod (count (.intersectObject raycaster (:object collision-cube))) 2) 1)))
-                         (:meshes world)))))
+(defn get-brick-at [world position]
+  (first (util/find-if (fn [[brick-name brick]]
+                         (let [collision-cube (-> (:collision-cube world)
+                                                  (assoc-in [:scale] [0.618274 0.185482 0.309138]) ;;##########
+                                                  (assoc-in [:rotation] (:rotation brick))
+                                                  (assoc-in [:position] (:position brick))
+                                                  three/sync-object)]
+                           (three/inside-object? (:object collision-cube) position)))
+                       (:meshes world))))
 
 (defn grab [world hand]
   (let [controller-transform (get-in world [:controllers hand])]
@@ -94,8 +92,9 @@
         (update-in world [:meshes object-name]
                    #(-> %
                         (merge snap-transform)
+                        (assoc-in [:snapped] true)
                         (three/sync-object))))
-      world)
+      (assoc-in world [:meshes object-name :snapped] false))
     world))
 
 (defn release [world hand]

@@ -55,3 +55,6 @@
   (let [m (transform->matrix t)]
     (.invert m)
     (matrix->transform m)))
+
+(defn combine-rotations [a b]
+  (:rotation (combine {:rotation a} {:rotation b})))

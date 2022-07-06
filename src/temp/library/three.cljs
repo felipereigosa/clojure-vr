@@ -40,14 +40,12 @@
                          scale
                          (vec (repeat 3 scale)))]
         (.set (.-scale object) sx sy sz)))
-    (.updateMatrixWorld object)
     obj))
 
 (defn create-mesh [world path geometry position rotation scale color]
   (let [material (new THREE.MeshPhongMaterial
                       #js{:color (get-color color)})
         mesh (new THREE.Mesh geometry material)]
-    (set! (.-side material) 2)
     (.add (:scene world) mesh)
     (assoc-in world path (sync-object
                            {:object mesh
@@ -90,18 +88,20 @@
       (assoc-in world path {:object mesh
                             :color color}))))
 
-(defn create-model [w path filename position rotation scale]
+(defn create-model [w path filename position rotation scale & [loaded]]
   (let [loader (new js/window.GLTFLoader)]
     (.load loader filename (fn [gltf]
                              (let [scene (.-scene gltf)]
                                (.add (:scene @world/world) scene)
                                (swap! world/world
-                                      assoc-in path (sync-object
-                                                      {:object scene
-                                                       :position position
-                                                       :rotation rotation
-                                                       :scale scale})))))
-    w))
+                                      #(cond-> %
+                                         true (assoc-in path (sync-object
+                                                               {:object scene
+                                                                :position position
+                                                                :rotation rotation
+                                                                :scale scale}))
+                                         loaded loaded))))))
+  w)
 
 (defn set-clear-color [world color]
   (set! (.-background (:scene world)) (get-color color))
@@ -151,3 +151,22 @@
 (defn set-visible [mesh value]
   (set! (.-visible (:object mesh)) value)
   mesh)
+
+(defn get-object [scene name]
+  (.getObjectByName scene name true))
+
+(defn assign-mesh [world path object]
+  (let [p (.-position object)
+        position [(.-x p) (.-y p) (.-z p)]]
+    (assoc-in world path (sync-object
+                           {:object object
+                            :position position
+                            :rotation [0 1 0 0]}))))
+
+(defn inside-object? [object [px py pz]]
+  (let [raycaster (new THREE.Raycaster)
+        point (new THREE.Vector3 px py pz)]
+    (.updateMatrixWorld object)
+    (.set raycaster point (new THREE.Vector3 1 0 0))
+    (set! (.. object -material -side) 2)
+    (= (mod (count (.intersectObject raycaster object)) 2) 1)))
