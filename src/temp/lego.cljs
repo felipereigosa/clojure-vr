@@ -78,7 +78,7 @@
     (-> world
         (assoc-in [:planet] planet)
         (three/set-clear-color [0 128 204])
-        (three/create-lights)
+        (three/create-lights [1 1 1])
         (assoc-in [:camera :position] [0 0.6 2])
         (assoc-in [:camera :rotation] [0 1 0 0])
         (update-in [:camera] three/sync-object)

@@ -7,6 +7,9 @@
 
 (def THREE js/window.THREE)
 
+(defn point->vector [point]
+  [(.-x point) (.-y point) (.-z point)])
+
 (defn get-color [color]
   (if (keyword? color)
     (new THREE.Color (name color))
@@ -107,11 +110,11 @@
   (set! (.-background (:scene world)) (get-color color))
   world)
 
-(defn create-lights [world]
+(defn create-lights [world [x y z]]
   (let [hemisphere-light (new THREE.HemisphereLight 0x606060 0x404040)
         directional-light (new THREE.DirectionalLight 0xffffff)
         scene (:scene world)]
-    (.set (.-position directional-light) 1 1 1)
+    (.set (.-position directional-light) x y z)
     (.add scene hemisphere-light)
     (.add scene directional-light)
     world))
@@ -146,18 +149,17 @@
   (let [camera (get-in world [:camera :camera])
         vector (new THREE.Vector3 0 0 -1)]
     (.applyQuaternion vector (.-quaternion camera))
-    [(.-x vector) (.-y vector) (.-z vector)]))
+    (point->vector vector)))
 
 (defn set-visible [mesh value]
   (set! (.-visible (:object mesh)) value)
   mesh)
 
-(defn get-object [scene name]
-  (.getObjectByName scene name true))
+(defn get-object [world name]
+  (.getObjectByName (:scene world) name true))
 
 (defn assign-mesh [world path object]
-  (let [p (.-position object)
-        position [(.-x p) (.-y p) (.-z p)]]
+  (let [position (point->vector (.-position object))]
     (assoc-in world path (sync-object
                            {:object object
                             :position position

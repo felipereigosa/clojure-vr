@@ -44,7 +44,7 @@
 (defn scalar-projection [a b]
   (dot-product a (normalize b)))
 
-(defn equals? [a b]
+(defn equal? [a b]
   (every? #(util/float= % 0.0) (subtract a b)))
 
 (defn angle
@@ -63,8 +63,8 @@
 (defn direction->rotation [direction]
   (let [direction (normalize direction)]
     (cond
-      (equals? [0 1 0] direction) [1 0 0 0]
-      (equals? [0 -1 0] direction) [1 0 0 180]
+      (equal? [0 1 0] direction) [1 0 0 0]
+      (equal? [0 -1 0] direction) [1 0 0 180]
       :else (let [axis (cross-product [0 1 0] direction)
                   angle (angle [0 1 0] direction)]
               (conj axis (util/to-degrees angle))))))

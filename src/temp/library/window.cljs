@@ -53,11 +53,11 @@
         width (.-innerWidth js/window)
         height (.-innerHeight js/window)
         ratio (/ width height)
-        camera (new THREE.PerspectiveCamera 30 ratio 0.1 100)
+        camera (new THREE.PerspectiveCamera 30 ratio 0.1 1000)
         renderer (new THREE.WebGLRenderer #js{:antialias true})
         holder (new THREE.Group)]
 
-    (set! (.-fog scene) (new THREE.Fog 0x0 5 100))
+    (set! (.-fog scene) (new THREE.Fog 0x001A4B 5 950))
     (.set (.-position camera) 0 7 15)
     (.lookAt camera 0 0 0)
 

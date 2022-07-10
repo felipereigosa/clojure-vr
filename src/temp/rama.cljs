@@ -9,7 +9,6 @@
 
 (defn assign-meshes [world]
   (let [scene (get-in world [:background-meshes :room :object])
-        children (array-seq (.-children scene))
         handle (three/get-object scene "handle")
         handle-collision (three/get-object scene "handle-collision")
         chamber (three/get-object scene "chamber")]
@@ -22,7 +21,7 @@
   (let []
     (-> world
         (three/set-clear-color [0 0 0])
-        (three/create-lights)
+        (three/create-lights [1 1 1])
         (assoc-in [:camera :position] [0 0.6 2])
         (assoc-in [:camera :rotation] [0 1 0 0])
         (update-in [:camera] three/sync-object)
