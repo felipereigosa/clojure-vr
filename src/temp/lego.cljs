@@ -9,22 +9,13 @@
             [temp.manipulation :as manipulation]
             [temp.navigation :as navigation]))
 
-(defn create-new-brick [world name position rotation color]
-  (let [brick (:brick world)
-        new-brick (.clone (:group brick))
-        mesh (first (array-seq (.-children new-brick)))]
-    (set! (.-material mesh) (get (:materials brick) color))
-    (.add (:scene world) new-brick)
-    (assoc-in world [:meshes name]
-              (three/sync-object
-                {:object new-brick
-                 :position position
-                 :rotation rotation
-                 :scale 1}))))
-
-(defn create-bricks [world]
-  (let [xs [-0.231853 -0.077284 0.077284 0.231853]
-        zs [-0.077284 0.077284]
+(defn get-snaps [[x z]]
+  (let [get-coords (fn [size]
+                     (map (fn [n]
+                            (* (- n (/ (dec size) 2.0)) 0.154568))
+                          (range size)))
+        xs (get-coords x)
+        zs (get-coords z)
         angles [0 90 180 270]
         top-snaps (map (fn [[x z angle]]
                          {:position [x 0.0925 z]
@@ -35,43 +26,60 @@
                             {:position [x -0.0925 z]
                              :rotation [1 0 0 180]
                              :type :other})
-                          (util/create-combinations xs zs))
-        snaps (vec (concat top-snaps bottom-snaps))]
+                          (util/create-combinations xs zs))]
+    (vec (concat top-snaps bottom-snaps))))
+
+(defn create-brick [world which name position rotation color]
+  (let [[x z] which
+        brick (.getObjectByName (:bricks world) (str x "x" z))
+        mesh (.clone brick)
+        dimensions [(* 0.1545685 x) 0.185482 (* 0.1545685 z)]
+        mass (reduce + dimensions)
+        snaps (get-snaps which)]
+    (set! (.-material mesh) (get (:materials world) color))
+    (.add (:scene world) mesh)
     (-> world
-        (create-new-brick :blue-brick [0 5.8 1] [1 0 0 0] :blue)
-        (update-in [:meshes :blue-brick] #(merge % {:snaps snaps}))
-        (physics/create-cube [:meshes :blue-brick] 1 [0.618274 0.185482 0.309138])
+        (assoc-in [:meshes name]
+                  (three/sync-object
+                    {:object mesh
+                     :position position
+                     :rotation rotation
+                     :scale 1
+                     :dimensions dimensions
+                     :snaps snaps}))
+        (physics/create-cube [:meshes name] mass dimensions))))
 
-        (create-new-brick :yellow-brick [0.154 (+ 3.8 0.185) 1.154] [0 1 0 90] :yellow)
-        (update-in [:meshes :yellow-brick] #(merge % {:snaps snaps}))
-        (physics/create-cube [:meshes :yellow-brick] 1 [0.618274 0.185482 0.309138])
+(defn create-bricks [world]
+  (-> world
+      (create-brick [2 2] :brick-0 [0 5.8 1] [1 0 0 0] :blue)
+      (create-brick [4 2] :brick-1 [0.154 (+ 3.8 0.185) 1.154] [0 1 0 90] :yellow)
+      (create-brick [2 2] :brick-2 [0.154 1.8 1.154] [0 1 0 90] :red)
+      (create-brick [6 1] :brick-3 [1 5.8 1] [1 0 0 0] :green)
+      (create-brick [8 1] :brick-4 [2 5.8 1] [1 0 0 0] :blue)
+      (create-brick [3 1] :brick-5 [-1 5.8 1] [1 0 0 0] :yellow)
+      (create-brick [1 1] :brick-6 [-2 5.8 1] [1 0 0 0] :red)
+      (create-brick [2 1] :brick-7 [1 5.8 2] [1 0 0 0] :green)
+      (create-brick [8 2] :brick-8 [2 5.8 2] [1 0 0 0] :yellow)
+      (create-brick [3 2] :brick-9 [-1 5.8 2] [1 0 0 0] :green)))
 
-        (create-new-brick :red-brick [0.154 1.8 1.154] [0 1 0 90] :red)
-        (update-in [:meshes :red-brick] #(merge % {:snaps snaps}))
-        (physics/create-cube [:meshes :red-brick] 1 [0.618274 0.185482 0.309138]))))
-
-(defn load-brick-helper [world brick-group]
-  (let [brick (first (array-seq (.-children brick-group)))
-        material (.-material brick)
+(defn create-materials [world brick-scene]
+  (let [material (.-material (first (array-seq (.-children brick-scene))))
         materials (reduce merge {:red material}
                           (map (fn [color]
                                  (let [new-material (.clone material)]
                                    (set! (.-color new-material) (three/get-color color))
                                    {color new-material}))
                                [:green :yellow :blue]))]
-    (-> world
-        (assoc-in [:brick :group] brick-group)
-        (assoc-in [:brick :materials] materials))))
+    (assoc-in world [:materials] materials)))
 
-(defn load-brick [w]
+(defn load-bricks [w]
   (let [loader (new js/window.GLTFLoader)]
-    (.load
-      loader
-      "brick.glb"
-      (fn [gltf]
-        (swap! world/world load-brick-helper (.-scene gltf))
-        (swap! world/world create-bricks))))
-  w)
+    (.load loader "bricks.glb"
+           (fn [gltf]
+             (swap! world/world create-materials (.-scene gltf))
+             (swap! world/world assoc-in [:bricks] (.-scene gltf))
+             (swap! world/world create-bricks)))
+    w))
 
 (defn create-world [world]
   (let [planet (physics/create-planet 10)]
@@ -89,11 +97,10 @@
                                 (three/get-grid-vertices 12 1) [2 2 2] 2)
         (three/create-cube [:controllers :right] [0.1 0 0] [0 1 0 0] 0.05 :red)
         (three/create-cube [:controllers :left] [-0.1 0 0] [0 1 0 0] 0.05 :white)
-        load-brick
+        load-bricks
         (three/create-model [:background-meshes :room] "baked.glb" [0 -0.18 0] [0 1 0 180] 1)
         (three/create-cube [:collision-cube] [0 1.5 1] [0 0 1 0] 0.2 :red)
-        (update-in [:collision-cube] #(three/set-visible % false))
-        )))
+        (update-in [:collision-cube] #(three/set-visible % false)))))
 
 (defn sync-bodies [world]
   (reduce (fn [w [mesh-name mesh]]
