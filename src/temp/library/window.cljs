@@ -9,13 +9,36 @@
 (def THREE js/window.THREE)
 
 (defn loop! []
-  (let [{:keys [renderer scene camera]} @world/world]
-    (swap! world/world core/update-world)
-    (.render renderer scene (:camera camera))))
+  (if (< @world/update-count 30)
+    (let [{:keys [renderer scene camera]} @world/world
+          active-fn (or (resolve 'core/keep-active?) identity)]
+      (swap! world/world core/update-world)
+      (.render renderer scene (:camera camera))
+      (swap! world/update-count inc)
+
+      (if (active-fn @world/world)
+        (reset! world/update-count 0)))))
 
 (def button (atom nil))
 
 (defn create-listener [handler]
+  (fn [event]
+    (let [x (.-clientX event)
+          y (.-clientY event)
+          button-names {1 :left
+                        4 :middle
+                        2 :right}
+          b (or (get button-names (.-buttons event))
+                @button)
+          e {:x x
+             :y y
+             :button b}]
+      (reset! world/update-count 0)
+      (reset! button b)
+      (if (not (nil? @world/world))
+        (swap! world/world handler e)))))
+
+(defn create-listener2 [handler]
   (fn [event]
     (let [x (.-clientX event)
           y (.-clientY event)
@@ -36,7 +59,7 @@
     (set! (.-onmousedown js/document)
           (create-listener (handler (resolve 'core/mouse-pressed))))
     (set! (.-onmousemove js/document)
-          (create-listener (handler (resolve 'core/mouse-moved))))
+          (create-listener2 (handler (resolve 'core/mouse-moved))))
     (set! (.-onmouseup js/document)
           (create-listener (handler (resolve 'core/mouse-released))))
     (set! (.-onwheel js/document)
@@ -58,7 +81,7 @@
         holder (new THREE.Group)]
 
     (set! (.-fog scene) (new THREE.Fog 0x001A4B 5 950))
-    (.set (.-position camera) 0 7 15)
+    (.set (.-position camera) 0 0 1)
     (.lookAt camera 0 0 0)
 
     (set! (.-background scene) (new THREE.Color 0x505050))
@@ -72,21 +95,48 @@
                                   :rotation [1 0 0 0]
                                   :object holder
                                   :camera camera}
-                         :renderer renderer})
+                         :renderer renderer
+                         :clock (new THREE.Clock)
+                         :to-load 0})
     (swap! world/world core/create-world)
-    (swap! world/world assoc-in [:button-functions] [#(core/button-pressed %1 %2)
-                                                     #(core/button-released %1 %2)])
+
+    ;; (if (and (resolve 'core/button-pressed)
+    ;;          (resolve 'core/button-released))
+    ;;   (swap! world/world assoc-in [:button-functions]
+    ;;          [#(core/button-pressed %1 %2)
+    ;;           #(core/button-released %1 %2)]))
+    
     (.setAnimationLoop renderer loop!)
-    (.appendChild (.-body js/document) (.-domElement renderer))
-    (.appendChild (.-body js/document) (.createButton js/window.VRButton renderer))
+    (let [root (.getElementById js/document "root")]
+      ;; (.-body js/document)
+      (set! (.-innerHTML root) "")
+      (.appendChild root (.-domElement renderer)))
+    
     (.add holder camera)
     (.add scene holder)
 
     (create-mouse-listeners!)
-    (new js/window.OrbitControls camera renderer.domElement)
+
+    (set! (.-onresize js/window)
+          (fn [event]
+            (let [width (.-innerWidth js/window)
+                  height (.-innerHeight js/window)
+                  ratio (/ width height)]
+              (println ratio)
+              (set! (.-aspect camera) ratio)
+              (.updateProjectionMatrix camera)
+              (.setSize renderer width height)
+              (world/redraw!))))
+
+    (reset! world/update-count 0)
 
     (controllers/set-index! renderer 0)
     (controllers/set-index! renderer 1)
     1))
 
 (defonce _ (init))
+
+;; (when @world/reload
+;;   (.reload (.-location js/window)))
+
+

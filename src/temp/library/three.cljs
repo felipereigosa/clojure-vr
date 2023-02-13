@@ -16,16 +16,6 @@
     (let [[r g b] color]
       (new THREE.Color (/ r 255) (/ g 255) (/ b 255)))))
 
-(defn set-camera [world position pivot]
-  (let [camera (:camera world)
-        inner-camera (:camera camera)]
-    (if-let [[x y z] position]
-      (.set (.-position inner-camera) x y z))
-
-    (if-let [[x y z] pivot]
-      (.lookAt inner-camera x y z))
-    world))
-
 (defn sync-object [obj]
   (let [{:keys [position rotation scale color object]} obj]
     (if (not (nil? color))
@@ -44,6 +34,20 @@
                          (vec (repeat 3 scale)))]
         (.set (.-scale object) sx sy sz)))
     obj))
+
+(defn set-visible [mesh value]
+  (set! (.-visible (:object mesh)) value)
+  mesh)
+
+(defn get-object [world name]
+  (.getObjectByName (:scene world) name true))
+
+(defn assign-mesh [world path object]
+  (let [position (point->vector (.-position object))]
+    (assoc-in world path (sync-object
+                           {:object object
+                            :position position
+                            :rotation [0 1 0 0]}))))
 
 (defn create-mesh [world path geometry position rotation scale color]
   (let [material (new THREE.MeshPhongMaterial
@@ -92,9 +96,11 @@
                             :color color}))))
 
 (defn create-model [w path filename position rotation scale & [loaded]]
-  (let [loader (new js/window.GLTFLoader)]
+  (let [loader (new js/window.GLTFLoader)
+        w (update-in w [:to-load] inc)]
     (.load loader filename (fn [gltf]
-                             (let [scene (.-scene gltf)]
+                             (let [scene (.-scene gltf)
+                                   has-animation? (not (empty? (.-animations gltf)))]
                                (.add (:scene @world/world) scene)
                                (swap! world/world
                                       #(cond-> %
@@ -103,20 +109,59 @@
                                                                 :position position
                                                                 :rotation rotation
                                                                 :scale scale}))
-                                         loaded loaded))))))
-  w)
+                                         has-animation? (assoc-in (conj path :clips) (.-animations gltf))
+                                         has-animation? (assoc-in (conj path :mixer)
+                                                                  (new THREE.AnimationMixer scene))
+                                         loaded loaded
+                                         true (update-in [:to-load] dec))))))
+    w))
+
+(defn direction->rotation [direction]
+  (let [direction (vector/normalize direction)]
+    (cond
+      (vector/equal? direction [0 1 0]) [0 1 0 0]
+      (vector/equal? direction [0 -1 0]) [1 0 0 180]
+      :else (let [axis (vector/cross-product [0 1 0] direction)
+                  angle (vector/angle direction [0 1 0])]
+              (conj (vector/normalize axis) angle)))))
+
+(defn create-segment [world start end]
+  (let [n (count (:segments world))
+        v (vector/subtract end start)
+        rotation (direction->rotation v)
+        position (vector/multiply (vector/add start end) 0.5)
+        length (vector/length v)]
+    (create-cylinder world [:segments n] position rotation
+                     [0.12 length 0.12] :white)))
 
 (defn set-clear-color [world color]
   (set! (.-background (:scene world)) (get-color color))
   world)
 
-(defn create-lights [world [x y z]]
+(defn create-lights [world [x y z] shadow?]
   (let [hemisphere-light (new THREE.HemisphereLight 0x606060 0x404040)
-        directional-light (new THREE.DirectionalLight 0xffffff)
-        scene (:scene world)]
+        directional-light (new THREE.DirectionalLight 0xaaaaaa)
+        scene (:scene world)
+        camera (:camera world)
+        d 40]
+    (when shadow?
+      (set! directional-light.castShadow true)
+      (set! directional-light.shadow.mapSize.width 4096)
+      (set! directional-light.shadow.mapSize.height 4096)
+
+      ;; (set! directional-light.shadow.camera.left (- d))
+      ;; (set! directional-light.shadow.camera.right d)
+      ;; (set! directional-light.shadow.camera.top d)
+      ;; (set! directional-light.shadow.camera.bottom (- d))
+      ;; (set! directional-light.shadow.camera.far (* 3 d))
+      ;; (set! directional-light.shadow.camera.near d)
+      )
+
+    ;; (.add scene (new THREE.DirectionalLightHelper directional-light 5))
+
     (.set (.-position directional-light) x y z)
-    (.add scene hemisphere-light)
-    (.add scene directional-light)
+    (.add (:object camera) hemisphere-light)
+    (.add (:object camera) directional-light)
     world))
 
 (defn get-grid-vertices [num-cells cell-size]
@@ -145,25 +190,6 @@
     (.add (:scene world) new-object)
     (assoc-in world path new-mesh)))
 
-(defn get-camera-direction [world]
-  (let [camera (get-in world [:camera :camera])
-        vector (new THREE.Vector3 0 0 -1)]
-    (.applyQuaternion vector (.-quaternion camera))
-    (point->vector vector)))
-
-(defn set-visible [mesh value]
-  (set! (.-visible (:object mesh)) value)
-  mesh)
-
-(defn get-object [world name]
-  (.getObjectByName (:scene world) name true))
-
-(defn assign-mesh [world path object]
-  (let [position (point->vector (.-position object))]
-    (assoc-in world path (sync-object
-                           {:object object
-                            :position position
-                            :rotation [0 1 0 0]}))))
 
 (defn inside-object? [object [px py pz]]
   (let [raycaster (new THREE.Raycaster)
@@ -172,3 +198,19 @@
     (.set raycaster point (new THREE.Vector3 1 0 0))
     (set! (.. object -material -side) 2)
     (= (mod (count (.intersectObject raycaster object)) 2) 1)))
+
+(defn play-action [object action-name & [time-scale]]
+  (let [mixer (:mixer object)
+        clip (.findByName THREE.AnimationClip (:clips object) (util/dekeyword action-name))
+        action (.clipAction mixer clip)]
+    (.stopAllAction mixer)
+    (.reset action)
+    (when time-scale
+      (set! (.-timeScale action) time-scale))
+    (set! (.-loop action) THREE.LoopOnce)
+    (set! (.-clampWhenFinished action) true)
+    (.play action)))
+
+
+
+

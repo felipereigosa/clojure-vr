@@ -1,25 +1,42 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Title</title>
-    <link rel="stylesheet" type="text/css" href="styles.css">
-    <link rel="icon" type="image/png" href="favicon.png">
-    <script type="importmap">
-      {
-          "imports": {
-              "three": "https://unpkg.com/three@0.138.0/build/three.module.js",
-              "VRButton": "https://unpkg.com/three@0.138.0/examples/jsm/webxr/VRButton.js",
-              "GLTFLoader": "https://unpkg.com/three@0.138.0/examples/jsm/loaders/GLTFLoader.js",
-              "OrbitControls": "https://unpkg.com/three@0.138.0/examples/jsm/controls/OrbitControls.js",
-              "cannon": "https://cdn.jsdelivr.net/npm/cannon-es@0.19.0/dist/cannon-es.js"
-          }
-      }
-    </script>
-  </head>
-  <body>
-    <script type="module" async="false" defer="false" src="libraries.js"></script>
-    <script src="cljs-out/dev-main.js"></script>
-  </body>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Title</title>
+        <link rel="stylesheet" type="text/css" href="styles.css">
+        <link rel="icon" type="image/png" href="favicon.png">
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="importmap">
+            {
+              "imports": {
+                "three": "https://unpkg.com/three@0.138.0/build/three.module.js",
+                "VRButton": "https://unpkg.com/three/examples/jsm/webxr/VRButton.js",
+                "GLTFLoader": "https://unpkg.com/three/examples/jsm/loaders/GLTFLoader.js",
+                "OrbitControls": "https://unpkg.com/three/examples/jsm/controls/OrbitControls.js",
+                "cannon-es": "https://unpkg.com/cannon-es/dist/cannon-es.js",
+                "three-to-cannon": "https://unpkg.com/three-to-cannon/dist/three-to-cannon.esm.js"
+              }
+            }
+        </script>
+        <script async="false" defer="false" type="module">
+            import * as THREE from 'three';
+            import {GLTFLoader} from 'GLTFLoader';
+            import {VRButton} from 'VRButton';
+            import {OrbitControls} from 'OrbitControls';
+            import * as CANNON from 'cannon-es';
+            import {threeToCannon, ShapeType} from 'three-to-cannon';
+
+            window.THREE = THREE;
+            window.VRButton = VRButton;
+            window.GLTFLoader = GLTFLoader;
+            window.OrbitControls = OrbitControls;
+            window.CANNON = CANNON
+            window.threeToCannon = threeToCannon;
+            window.ShapeType = ShapeType;
+        </script>
+        <script src="cljs-out/dev-main.js"></script>
+    </body>
 </html>

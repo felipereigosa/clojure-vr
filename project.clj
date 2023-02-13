@@ -6,10 +6,13 @@
 
   :profiles {:dev
              {:dependencies [[com.bhauman/figwheel-main "0.2.6"]
-                             [com.bhauman/rebel-readline-cljs "0.1.4"]]
+                             [com.bhauman/rebel-readline-cljs "0.1.4"]
+                             [cljs-ajax "0.8.4"]]
               :resource-paths ["target"]
               :clean-targets ^{:protect false} ["target"]}}
-  :figwheel {:http-server-root "public"}
+  
+  :figwheel {:http-server-root "public"
+             :hot-reload-cljs false}
 
   :plugins [[lein-cljsbuild "1.1.7"]]
   :cljsbuild {:builds [{:source-paths ["src/temp"]
@@ -17,4 +20,5 @@
                                    :optimizations :advanced
                                    :pretty-print true
                                    :install-deps true}}]}
+  :java-source-paths ["src/server/java"]
   :main server.core)
